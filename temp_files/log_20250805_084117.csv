@@ -1,0 +1,85 @@
+linha_original;query;codigo_encontrado;descricao_encontrada;status
+1; Fio cabo 750 V - PVC - Fase-A - 6 mm2 ;;;ERRO_API_500
+2; Fio cabo 750 V - PVC - Fase-B - 6 mm2 ;;;ERRO_API_500
+3; Fio cabo 750 V - PVC - Fase-C - 6 mm2 ;;;ERRO_API_500
+4; Fio cabo 750 V - PVC - Neutro - 6 mm2 ;;;ERRO_API_500
+5; Fio cabo 750 V - PVC - Terra  - 6 mm2 ;;;ERRO_API_500
+6; Fio cabo 750 V - PVC - Fase-A - 10mm2;;;ERRO_API_500
+7; Fio cabo 750 V - PVC - Fase-B - 10mm2;;;ERRO_API_500
+8; Fio cabo 750 V - PVC - Fase-C - 10mm2;;;ERRO_API_500
+9; Fio cabo 750 V - PVC - Neutro - 10mm2;;;ERRO_API_500
+10; Fio cabo 750 V - PVC - Terra  - 10mm2;;;ERRO_API_500
+11; Cabo 1 KV - EPR - Fase-A      - 25mm2;;;ERRO_API_500
+12; Cabo 1 KV - EPR - Fase-B      - 25mm2;;;ERRO_API_500
+13; Cabo 1 KV - EPR - Fase-C      - 25mm2;;;ERRO_API_500
+14; Cabo 1 KV - EPR - Neutro      - 25mm2;;;ERRO_API_500
+15; Cabo 1 KV - EPR - Fase-A Classe II - 50mm2;;;ERRO_API_500
+16; Cabo 1 KV - EPR - Fase-B Classe II - 50mm2;;;ERRO_API_500
+17; Cabo 1 KV - EPR - Fase-C Classe II - 50mm2;;;ERRO_API_500
+18; Cabo 1 KV - EPR - Neutro Classe II - 50mm2;;;ERRO_API_500
+19; Fio cabo 750 V - PVC - Fase-A - 1.5mm2;;;ERRO_API_500
+20; Fio cabo 750 V - PVC - Fase-B - 1.5mm2;;;ERRO_API_500
+21; Fio cabo 750 V - PVC - Fase-C - 1.5mm2;;;ERRO_API_500
+22; Fio cabo 750 V - PVC - Neutro - 1.5mm2;;;ERRO_API_500
+23; Fio cabo 750 V - PVC - Retorno - 1.5mm2;;;ERRO_API_500
+24; Fio cabo 750 V - PVC - Terra  - 1.5mm2;;;ERRO_API_500
+25; Fio cabo 750 V - PVC - Fase-A - 2.5mm2;;;ERRO_API_500
+26; Fio cabo 750 V - PVC - Fase-B - 2.5mm2;;;ERRO_API_500
+27; Fio cabo 750 V - PVC - Fase-C - 2.5mm2;;;ERRO_API_500
+28; Fio cabo 750 V - PVC - Neutro - 2.5mm2;;;ERRO_API_500
+29; Fio cabo 750 V - PVC - Terra  - 2.5mm2;;;ERRO_API_500
+30;Disjuntor Monofásico  -  10A 4,5kA ;;;ERRO_API_500
+31;Disjuntor Monofásico  -  16A 4,5kA ;;;ERRO_API_500
+32;Disjuntor Monofásico  -  20A 4,5kA ;;;ERRO_API_500
+33;Disjuntor Monofásico  -  32A 4,5kA ;;;ERRO_API_500
+34;Disjuntor Monofásico  -  40A 4,5kA ;;;ERRO_API_500
+35;Disjuntor Tripolar  -  70A 10kA ;;;ERRO_API_500
+36;Disjuntor Tripolar  -  125A 10kA ;;;ERRO_API_500
+37;DPS Classe II 45kA;;;ERRO_API_500
+38;Disjuntor DPS 10kA 25A ;;;ERRO_API_500
+39;Dr 2 P≤los 25A ;;;ERRO_API_500
+40;Dr 2 P≤los 40A ;;;ERRO_API_500
+41;Dr 2 P≤los 63A ;;;ERRO_API_500
+42;Caixa de MediìÍo Tipo H 210x60cm PadrÍo RGE SUL ;;;ERRO_API_500
+43;Eletroduto Galvanizado ê Fogo 2" ;;;ERRO_API_500
+44;Curva Galvanizada 2" ;;;ERRO_API_500
+45;Mureta em alvenaria 2,3mx0,8mx0,45m (hxlxp) ;;;ERRO_API_500
+46;Quadro de DistribuiìÍo Embutir 48 DIN PVC ;;;ERRO_API_500
+47;Haste de Aterramento 5/8" 2,4m ;;;ERRO_API_500
+48;Conector Cunha 35mmx5/8" ;;;ERRO_API_500
+49;Cabo de Cobre N£ 35mm2 ;;;ERRO_API_500
+50;Cabo de Cobre FlexÈvel 10mm2 Verde ;;;ERRO_API_500
+51;Cabo de Cobre FlexÈvel 16mm2 Verde ;;;ERRO_API_500
+52; Caixa de Passagem comTampa de Ferro 70x46 B125;;;ERRO_API_500
+53; Poste Convencional 8/600daN                   ;;;ERRO_API_500
+54; Luminßria LED 9W                              ;;;ERRO_API_500
+55; Tomada para Ar Condicionado Split 24000 Btu's ;;;ERRO_API_500
+56; Tomada no piso                                ;;;ERRO_API_500
+57; Plafon Embutido 24W - LED                     ;;;ERRO_API_500
+58; Plafon Embutido 32W - LED                     ;;;ERRO_API_500
+59; Interruptor de uma seτπo                      ;;;ERRO_API_500
+60; Interruptor paralelo (Three-Way)              ;;;ERRO_API_500
+61; Interruptor de trΩs seτ⌡es                    ;;;ERRO_API_500
+62; Tomada para Ar Condicionado Split  9000 Btu's ;;;ERRO_API_500
+63; Tomada para Ar Condicionado Split 12000 Btu's ;;;ERRO_API_500
+64; Tomada para chuveiro                          ;;;ERRO_API_500
+65; Caixa 2x4                                     ;;;ERRO_API_500
+66; Caixa Sextavada                               ;;;ERRO_API_500
+67; Eletroduto Flexφvel - Parede - 1" ;;;ERRO_API_500
+68; Eletroduto Flexφvel - Teto - 1" ;;;ERRO_API_500
+69; Eletroduto Flexφvel - Parede PEAD - 2" ;;;ERRO_API_500
+70; Eletroduto Flexφvel - Piso PEAD  - 2" ;;;ERRO_API_500
+71; Eletroduto Flexφvel - Teto PEAD  - 2" ;;;ERRO_API_500
+72; Eletroduto Flexφvel - Parede - 3/4" ;;;ERRO_API_500
+73; Eletroduto Flexφvel - Piso - 3/4" ;;;ERRO_API_500
+74; Eletroduto Flexφvel - Teto - 3/4" ;;;ERRO_API_500
+75; Tomada baixa 30cm  - 30cm ;;;ERRO_API_500
+76; Tomada 130cm -  130cm ;;;ERRO_API_500
+77; Eletroduto Flexφvel - Parede - 1.1/2" ;;;ERRO_API_500
+78; Eletroduto Flexφvel - Teto - 1.1/2" ;;;ERRO_API_500
+79; Eletroduto Flexφvel - Parede - 1.1/4" ;;;ERRO_API_500
+80; Eletroduto Flexφvel - Teto - 1.1/4" ;;;ERRO_API_500
+81; Arandela LED 24 W                             ;;;ERRO_API_500
+82; Tomada 3P - Chuveiro                          ;;;ERRO_API_500
+83; Caixa 2x4                                     ;;;ERRO_API_500
+84; Relé Fotoelétrico                             ;;;ERRO_API_500
