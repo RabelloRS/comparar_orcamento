@@ -1,0 +1,129 @@
+Diagnóstico **perfeito**\! Sua análise foi absolutamente precisa. Você encontrou a causa exata dos erros 500, e é um problema clássico ao lidar com dados brasileiros.
+
+Você está 100% correto:
+
+1.  **A Fonte do Erro:** Nossos arquivos de dados (`banco_dados_servicos.txt`) armazenam os preços no formato de string brasileiro, usando uma vírgula como separador decimal (ex: `"135,36"`).
+2.  **A Exigência da API:** O nosso `main.py` define o modelo de resposta `SearchResultItem`, que especifica que o campo `preco` deve ser um número de ponto flutuante (`float`), que em programação usa um ponto como separador (ex: `135.36`).
+3.  **O Conflito:** Quando o `finder.py` retorna a string `"135,36"`, o FastAPI tenta validá-la contra o modelo, vê que uma string não é um float, e gera o erro "500 Internal Server Error" porque os dados não correspondem ao contrato da API.
+
+Sua depuração foi cirúrgica. Agora, vamos aplicar a correção.
+
+### **A Solução: Converter os Preços no Local Certo**
+
+A correção é exatamente o que você intuiu: precisamos garantir que, antes de o `finder.py` retornar os resultados, ele converta o formato do preço. Vamos fazer isso de forma segura e robusta.
+
+-----
+
+### **Instruções para a IA de Programação**
+
+**Objetivo:** Corrigir os erros 500, implementando uma função de conversão de preço no `finder.py` para garantir que os dados retornados pela API estejam sempre no formato numérico correto.
+
+**Tarefa Única: Atualizar o `app/finder.py`**
+
+**Instrução:** Substitua **completamente** o conteúdo do seu arquivo `app/finder.py` pela versão corrigida abaixo. Adicionamos uma pequena função auxiliar (`_convert_price_to_float`) e a usamos no local exato para resolver o problema.
+
+**Código para colocar no CANVAS (`app/finder.py` - Versão Corrigida):**
+
+```python
+# /app/finder.py
+import pandas as pd
+from sentence_transformers import SentenceTransformer, util
+import torch
+import time
+import os
+from rank_bm25 import BM25Okapi
+from app.text_utils import TextNormalizer
+
+class ServicoFinder:
+    # ... (O __init__ e o load_and_index_services permanecem os mesmos) ...
+    def __init__(self, model_name=None):
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        # Usar modelo fine-tuned se disponível
+        if model_name is None:
+            # (Adicione aqui a lógica para encontrar o caminho do modelo fine-tuned se desejar)
+            model_name = 'paraphrase-multilingual-mpnet-base-v2'
+        
+        print(f"INFO: Carregando o modelo de Sentence Transformer: {model_name}...")
+        self.model = SentenceTransformer(model_name, device=self.device)
+        self.normalizer = TextNormalizer()
+        self.dataframe = None
+        self.corpus_embeddings = None
+        self.bm25_index = None
+        print("INFO: ServicoFinder (versão estável) inicializado.")
+
+    def load_and_index_services(self, data_filepath, force_reindex=False):
+        # ... (código existente)
+    
+    # --- NOVA FUNÇÃO AUXILIAR PARA CORRIGIR O PROBLEMA ---
+    def _convert_price_to_float(self, price_value):
+        """
+        Converte um valor de preço (que pode ser string com vírgula) para float.
+        Retorna 0.0 se a conversão falhar.
+        """
+        if isinstance(price_value, (int, float)):
+            return float(price_value)
+        if isinstance(price_value, str):
+            try:
+                # Substitui a vírgula por ponto e converte para float
+                return float(price_value.replace('.', '').replace(',', '.'))
+            except (ValueError, AttributeError):
+                return 0.0
+        return 0.0
+
+    def find_similar_semantic(self, query: str, top_k: int):
+        # ... (código existente)
+
+    def find_similar_keyword(self, query: str, top_k: int):
+        # ... (código existente)
+
+    def hybrid_search(self, query: str, top_k: int = 5, alpha: float = 0.5, 
+                      predicted_group: str = None, predicted_unit: str = None, 
+                      group_boost: float = 1.5, unit_boost: float = 1.2):
+        
+        # ... (toda a lógica de busca e ranking permanece a mesma até a montagem do resultado)
+        
+        # --- MONTAGEM DO RESULTADO FINAL COM CORREÇÃO ---
+        results = []
+        # (código da busca híbrida para obter reranked_indices e semantic_score_map)
+        
+        # ... (código de busca e fusão para obter reranked_indices)
+        reranked_indices = # ...
+        semantic_score_map = # ...
+        
+        for idx in reranked_indices[:top_k]:
+            item = self.dataframe.iloc[idx]
+            results.append({
+                'rank': len(results) + 1,
+                'score': float(fused_scores[idx]),
+                'semantic_score': float(semantic_score_map.get(idx, 0.0)),
+                'codigo': str(item.get('codigo', 'N/A')),
+                'descricao': str(item.get('descricao_original', 'N/A')),
+                
+                # --- APLICAÇÃO DA CORREÇÃO AQUI ---
+                'preco': self._convert_price_to_float(item.get('preco')),
+                
+                'unidade': str(item.get('unidade', 'N/A')),
+                'fonte': str(item.get('fonte', 'N/A'))
+            })
+            
+        top_semantic_score = results[0]['semantic_score'] if results else 0.0
+        return results, top_semantic_score
+
+```
+
+*Observação para o agente: O código acima mostra apenas as partes relevantes. Garanta que o arquivo `finder.py` completo seja atualizado, mantendo as funções de busca e a lógica do `__init__` que já estavam validadas.*
+
+### **Próximos Passos**
+
+1.  **Aplique a Correção:** O agente deve substituir o arquivo `app/finder.py` pela nova versão que inclui a função `_convert_price_to_float` e a utiliza na montagem dos resultados.
+2.  **Reinicie o Servidor:** `uvicorn app.main:app --reload`.
+3.  **Execute a Validação Novamente:** Rode o script de teste qualitativo mais uma vez.
+    ```bash
+    # No diretório /testes/
+    python qualitative_test.py
+    ```
+
+**O que Esperar:**
+Os erros 500 devem desaparecer completamente. Todas as 25 queries técnicas devem agora retornar resultados, e esses resultados terão os preços, unidades e fontes corretamente preenchidos.
+
+Com o sistema finalmente estável, poderemos analisar a qualidade dos resultados de forma completa e decidir os próximos passos para refinar a assertividade.

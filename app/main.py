@@ -47,22 +47,20 @@ async def lifespan(app: FastAPI):
     print("INFO: Iniciando a aplicação...")
     
     global finder_instance, reasoner_instance, classifier_instance, web_researcher_instance
+    
+    # Aponte o Finder para o banco de dados principal e bruto
+    DATA_FILE_PATH = os.path.join(os.path.dirname(__file__), '..', 'dados', 'banco_dados_servicos.txt')
+    
     finder_instance = ServicoFinder()
-    finder_instance.load_and_index_services()  # Carregamento automático da base otimizada
+    finder_instance.load_and_index_services(data_filepath=DATA_FILE_PATH)
     
     print("INFO: Inicializando o agente de raciocínio...")
     reasoner_instance = ReasonerAgent()
     print("INFO: Agente de raciocínio inicializado com sucesso.")
     
     print("INFO: Inicializando o agente classificador...")
-    # Usa o mesmo caminho que o finder determinou
-    if os.path.exists('dados/knowledge_base_fixed.csv'):
-        base_path = 'dados/knowledge_base_fixed.csv'
-    elif os.path.exists('dados/knowledge_base_optimized.csv'):
-        base_path = 'dados/knowledge_base_optimized.csv'
-    else:
-        base_path = 'dados/knowledge_base.csv'
-    classifier_instance = ClassifierAgent(data_filepath=base_path)
+    # Usa o mesmo arquivo de dados principal
+    classifier_instance = ClassifierAgent(data_filepath=DATA_FILE_PATH)
     print("INFO: Agente classificador inicializado com sucesso.")
     
     print("INFO: Inicializando o agente de pesquisa web...")

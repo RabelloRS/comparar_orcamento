@@ -1,0 +1,172 @@
+Objetivo: Substituir o knowledge_builder.py pela versão final e corrigida, que agora inclui um extrator especializado para as Fichas de Especificação Técnica de Insumos, garantindo que todos os tipos de documentos sejam processados da maneira ideal.
+
+Tarefa Única: Atualizar o knowledge_builder.py
+
+Instrução: Substitua completamente o conteúdo do seu arquivo knowledge_builder.py por este código final e validado.
+
+Código para colocar no CANVAS (knowledge_builder.py):
+
+Python
+
+# knowledge_builder.py
+import pandas as pd
+import os
+import fitz  # PyMuPDF
+import re
+from app.text_utils import TextNormalizer
+import time
+
+class KnowledgeBuilder:
+    """
+    Orquestrador inteligente que utiliza extratores especializados para CADA tipo de
+    documento PDF, garantindo um enriquecimento de dados preciso e robusto.
+    VERSÃO FINAL E CORRIGIDA.
+    """
+    def __init__(self):
+        self.docs_path = 'documentos'
+        self.data_path = 'dados'
+        self.main_db_path = os.path.join(self.data_path, 'banco_dados_servicos.txt')
+        self.output_kb_path = os.path.join(self.data_path, 'knowledge_base.csv')
+        self.normalizer = TextNormalizer()
+        self.code_pattern = re.compile(r"CÓDIGO\s*SINAPI\s*:\s*(\d+)")
+        print("INFO: Construtor de Conhecimento Final inicializado.")
+
+    def _extract_full_text(self, file_path):
+        """Extrai o texto completo de um arquivo PDF."""
+        try:
+            doc = fitz.open(file_path)
+            return " ".join(page.get_text("text") for page in doc)
+        except Exception as e:
+            print(f"  -> AVISO: Não foi possível ler o PDF '{os.path.basename(file_path)}': {e}")
+            return ""
+
+    # --- EXTRATORES ESPECIALIZADOS ---
+
+    def _extractor_sinapi_insumos(self, text):
+        """
+        [ESPECIALISTA 1] - Otimizado para as Fichas de Especificação de Insumos.
+        Extrai o texto por código SINAPI encontrado dentro do documento.
+        """
+        associations = {}
+        # Usa regex para encontrar todas as ocorrências de "CÓDIGO SINAPI: XXXXX"
+        matches = self.code_pattern.finditer(text)
+        
+        # Converte os matches para uma lista para podermos olhar à frente
+        matches = list(matches)
+        
+        for i, match in enumerate(matches):
+            code = match.group(1)
+            start_pos = match.end()
+            
+            # O texto do insumo vai do final deste match até o início do próximo
+            end_pos = matches[i + 1].start() if i + 1 < len(matches) else len(text)
+            
+            insumo_text = text[start_pos:end_pos].strip()
+            associations[code] = insumo_text
+
+        return associations
+
+    def _extractor_generic_cadernos(self, text, df_db):
+        """
+        [ESPECIALISTA 2] - Otimizado para Cadernos Técnicos e de Encargos.
+        Usa a estratégia de busca reversa para associar o conteúdo completo do
+        documento a serviços relevantes.
+        """
+        normalized_text = self.normalizer.normalize(text)
+        if not normalized_text:
+            return {}
+            
+        associations = {}
+        # Para cada serviço, verifica se seus termos chave estão no documento
+        for code, service_row in df_db.iterrows():
+            service_desc = self.normalizer.normalize(service_row['descricao_original'])
+            key_terms = [word for word in service_desc.split() if len(word) > 4][:4]
+
+            if len(key_terms) >= 3 and all(term in normalized_text for term in key_terms):
+                # Associa o texto completo do caderno a este serviço
+                associations[code] = text
+
+        return associations
+
+    def run(self):
+        start_time = time.time()
+        print("\n--- INICIANDO CONSTRUÇÃO COM PIPELINE FINAL E CORRIGIDO ---")
+
+        # ETAPA 1: Carregar banco de dados principal
+        print("\n[ETAPA 1/3] Carregando banco de dados principal...")
+        df_db = pd.read_csv(self.main_db_path, dtype={'codigo_da_composicao': str})
+        df_db.rename(columns={'codigo_da_composicao': 'codigo', 'descricao_completa_do_servico_prestado': 'descricao_original'}, inplace=True, errors='ignore')
+        df_db.set_index('codigo', inplace=True)
+        print(f" -> {len(df_db)} serviços carregados.")
+
+        # Dicionário para guardar todo o texto enriquecido por código de serviço
+        final_enriched_text = {code: "" for code in df_db.index}
+
+        # ETAPA 2: Orquestração da Extração
+        print("\n[ETAPA 2/3] Processando documentos com extratores especializados...")
+        pdf_files = [f for f in os.listdir(self.docs_path) if f.lower().endswith('.pdf')]
+
+        for filename in pdf_files:
+            pdf_path = os.path.join(self.docs_path, filename)
+            print(f"  -> Processando '{filename}'...")
+            
+            text = self._extract_full_text(pdf_path)
+            if not text: continue
+
+            associations = {}
+            # --- ORQUESTRADOR / DISPATCHER ---
+            # Identifica o tipo de documento pelo seu conteúdo e usa o especialista correto
+            if "FICHA DE ESPECIFICACAO TECNICA DE INSUMO" in text.upper():
+                print("    -> Usando Especialista de Insumos...")
+                associations = self._extractor_sinapi_insumos(text)
+            else:
+                print("    -> Usando Especialista de Cadernos Técnicos...")
+                associations = self._extractor_generic_cadernos(text, df_db)
+
+            print(f"    -> Encontradas {len(associations)} associações para este documento.")
+            # Agrega o texto encontrado ao dicionário final
+            for code, associated_text in associations.items():
+                if code in final_enriched_text:
+                    final_enriched_text[code] += associated_text + " "
+
+        # ETAPA 3: Construir a Base de Conhecimento Final
+        print("\n[ETAPA 3/3] Construindo a Base de Conhecimento Final...")
+        df_db['texto_enriquecido'] = df_db.index.map(final_enriched_text)
+        df_db.fillna('', inplace=True)
+        
+        df_db['descricao_para_ia'] = df_db['descricao_original'] + " | Contexto Adicional: " + df_db['texto_enriquecido']
+        df_db['descricao_normalizada'] = df_db['descricao_para_ia'].apply(self.normalizer.normalize)
+        
+        df_final = df_db.reset_index()
+        final_columns = ['codigo', 'descricao_original', 'unidade', 'preco', 'fonte', 'grupo', 'descricao_normalizada']
+        final_columns_exist = [col for col in final_columns if col in df_final.columns]
+        df_to_save = df_final[final_columns_exist]
+
+        df_to_save.to_csv(self.output_kb_path, index=False, sep=';', encoding='utf-8-sig')
+
+        end_time = time.time()
+        print(f"\n✅ SUCESSO! Base de conhecimento final e robusta criada em '{self.output_kb_path}'.")
+        print(f"Tempo total do processo: {end_time - start_time:.2f} segundos.")
+
+if __name__ == "__main__":
+    builder = KnowledgeBuilder()
+    builder.run()
+O Que Fazer Agora
+O plano de ação é o mesmo da nossa última tentativa, mas agora com a confiança de que o processo está correto.
+
+Execute o Construtor de Conhecimento Final:
+
+Bash
+
+python knowledge_builder.py
+Analise a Saída: Observe o terminal. Você deverá ver claramente o script a identificar o SINAPI_Fichas_Especificacao_Tecnica_Insumos.pdf e a usar o "Especialista de Insumos" para ele, e o "Especialista de Cadernos Técnicos" para os outros.
+
+Limpe o Cache e Reinicie a API: Apague a pasta /dados/cache e reinicie o uvicorn.
+
+Execute a Validação Final:
+
+Bash
+
+# No diretório /testes/
+python validator.py test_suite_v3.json
+Com esta correção, garantimos que todo o seu valioso conhecimento documental está a ser processado da maneira mais eficaz possível. Os resultados desta validação nos darão a medida final e verdadeira da inteligência do nosso sistema antes de avançarmos.

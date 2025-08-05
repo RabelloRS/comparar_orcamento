@@ -1,0 +1,110 @@
+
+**Objetivo:** Executar todas as 25 consultas técnicas da `test_suite_v3.json` contra o sistema atual e apresentar os resultados de forma clara para uma análise humana.
+
+-----
+
+#### **Tarefa 1: Criar o Script de Teste Qualitativo (`qualitative_test.py`)**
+
+Para realizar esta tarefa de forma organizada, você irá criar um novo script de teste focado em apresentar os resultados de forma legível.
+
+**Ação:** Crie um novo arquivo na pasta `/testes/` chamado `qualitative_test.py`.
+
+**Código para colocar no CANVAS (`/testes/qualitative_test.py`):**
+
+```python
+# /testes/qualitative_test.py
+import requests
+import json
+import os
+
+# --- Configuração ---
+API_URL = "http://localhost:8000/buscar"
+TEST_SUITE_PATH = "test_suite_v3.json"
+
+def run_qualitative_test():
+    """
+    Executa as queries da suíte de testes e exibe os 3 melhores resultados
+    para cada uma, permitindo uma análise qualitativa.
+    """
+    print("="*80)
+    print("INICIANDO SESSÃO DE TESTE QUALITATIVO COM A NOVA BASE DE CONHECIMENTO")
+    print("="*80)
+
+    try:
+        with open(TEST_SUITE_PATH, 'r', encoding='utf-8') as f:
+            # Suporta a estrutura de dicionário com a chave 'test_cases'
+            test_data = json.load(f)
+            test_cases = test_data.get('test_cases', [])
+    except FileNotFoundError:
+        print(f"ERRO: Arquivo de testes '{TEST_SUITE_PATH}' não encontrado.")
+        return
+    except json.JSONDecodeError:
+        print(f"ERRO: O arquivo '{TEST_SUITE_PATH}' não é um JSON válido.")
+        return
+
+    if not test_cases:
+        print("AVISO: Nenhum caso de teste encontrado no arquivo.")
+        return
+
+    for i, test in enumerate(test_cases, 1):
+        query = test.get('query')
+        if not query:
+            continue
+
+        print(f"\n--- [{i}/{len(test_cases)}] TESTANDO QUERY: \"{query}\" ---")
+        
+        payload = {"texto_busca": query, "top_k": 3}
+        
+        try:
+            response = requests.post(API_URL, json=payload, timeout=120)
+            
+            if response.status_code == 200:
+                results = response.json().get('results', [])
+                if not results:
+                    print("  -> Nenhum resultado retornado pela API.")
+                else:
+                    for item in results:
+                        # Limpa a descrição para melhor legibilidade, mostrando apenas a parte original
+                        clean_desc = item['descricao'].split('|')[0].strip()
+                        print(f"  {item['rank']}. [CÓDIGO: {item['codigo']}] [Confiança: {item.get('semantic_score', 0.0):.4f}]")
+                        print(f"     Descrição: {clean_desc}")
+            else:
+                print(f"  -> ERRO na API: Status {response.status_code} - {response.text}")
+
+        except requests.RequestException as e:
+            print(f"  -> ERRO de conexão com a API: {e}")
+
+    print("\n" + "="*80)
+    print("SESSÃO DE TESTE QUALITATIVO CONCLUÍDA")
+    print("="*80)
+
+if __name__ == "__main__":
+    run_qualitative_test()
+
+```
+
+#### **Tarefa 2: Execução e Análise**
+
+**Ação:**
+
+1.  **Confirme os Servidores:** Garanta que tanto o servidor da API (`uvicorn`) quanto a interface (`streamlit`) estejam rodando.
+
+2.  **Execute o Script:** No seu terminal, na pasta `/testes/`, execute o novo script.
+
+    ```bash
+    # No diretório /testes/
+    python qualitative_test.py
+    ```
+
+**O Que Fazer com o Resultado:**
+
+O terminal irá imprimir uma lista numerada de 1 a 25. Para cada uma das suas queries técnicas, ele mostrará os 3 melhores resultados que o sistema encontrou, junto com o código e o score de confiança.
+
+Sua tarefa, como especialista humano, é ler estes resultados e fazer uma avaliação subjetiva:
+
+  * Os resultados fazem sentido?
+  * O item número 1 é realmente a melhor resposta?
+  * Se não, a resposta correta está entre os 3 primeiros?
+  * Os scores de confiança parecem corresponder à qualidade dos resultados?
+
+Esta análise é o passo final antes de podermos criar a nossa "verdade fundamental". Com base nesta sua revisão, o próximo passo será preencher os `expected_codes` no arquivo `test_suite_v3.json` para que, então, possamos rodar o `validator.py` e obter a nossa nova e definitiva métrica de assertividade do sistema.
