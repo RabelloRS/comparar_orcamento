@@ -17,6 +17,9 @@ temp_files/
 dados/
 documentos/
 
+# Ignorar arquivos de configuração com chaves de API
+.env
+
 # Ignorar arquivos de cache específicos da aplicação
 .cache/
 backend/app/dados/cache/
