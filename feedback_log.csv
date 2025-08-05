@@ -1,0 +1,2 @@
+timestamp;query;top_result_code;expected_correct_code;is_choice_correct;human_guidance
+2025-08-05T03:50:35.493440;Difusor 3 vias, com caixa plenum e registro, TAM. 7;61.10.511;61.10.511;Sim;

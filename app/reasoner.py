@@ -7,36 +7,51 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class ReasonerAgent:
+    """
+    Agente Raciocinador com capacidade de sugerir novas buscas em caso de falha.
+    """
     def __init__(self):
         self.client = OpenAI()
-        self.model = "gpt-4o-mini" # Modelo atualizado
+        self.model = "gpt-4o-mini"
 
     def _build_expert_prompt(self, user_query: str, search_results: list[dict]) -> str:
         prompt = f"""
-        Você é um engenheiro de especificações sênior, extremamente detalhista. Sua tarefa é analisar a solicitação de um usuário e escolher o serviço mais adequado de uma lista de candidatos, prestando atenção máxima às características técnicas.
+Você é um engenheiro de especificações sênior e detalhista. Sua tarefa é analisar a solicitação de um usuário e escolher o serviço mais adequado de uma lista de candidatos.
 
-        **Regra Principal:** Adjetivos que definem uma propriedade física, material ou tipo (ex: 'corrugado', 'rígido', 'estrutural', 'manual', 'mecanizado') são CRÍTICOS e devem ter um peso maior na sua decisão.
+Siga estritamente os seguintes passos no seu raciocínio:
+1. **Análise da Solicitação:** Analise a solicitação: "{user_query}". Identifique os componentes principais e as CARACTERÍSTICAS CRÍTICAS (materiais, dimensões, tipos como 'corrugado', 'manual', etc.).
+2. **Avaliação dos Candidatos:** Avalie cada serviço da lista abaixo, verificando se atende às CARACTERÍSTICAS CRÍTICAS.
+3. **Conclusão:** Declare qual é o serviço mais apropriado.
 
-        Siga estritamente os seguintes passos no seu raciocínio:
-        1. **Análise da Solicitação:** Analise a solicitação: "{user_query}". Identifique os componentes principais e, mais importante, as CARACTERÍSTICAS CRÍTICAS (materiais, dimensões, tipos).
-        2. **Avaliação dos Candidatos:** Avalie cada serviço da lista abaixo. Para cada um, verifique explicitamente se ele atende ou não às CARACTERÍSTICAS CRÍTICAS identificadas.
-        3. **Conclusão:** Declare qual é o serviço mais apropriado. Se um candidato corresponde às características críticas, ele deve ser preferido, mesmo que outros termos sejam ligeiramente diferentes. Se nenhum candidato atender às características críticas, declare que nenhum é adequado.
+Sua resposta final DEVE ser um objeto JSON formatado EXATAMENTE da seguinte forma:
 
-        Após o seu raciocínio, sua resposta final DEVE ser um objeto JSON formatado EXATAMENTE da seguinte forma:
-        {{
-          "raciocinio": "Seu texto de análise detalhada aqui, seguindo os 3 passos.",
-          "codigo_final": "O código do serviço escolhido aqui. Se nenhum for adequado, retorne 'N/A'."
-        }}
+**Se você encontrar um serviço adequado:**
+{{
+  "raciocinio": "Seu texto de análise detalhada aqui.",
+  "codigo_final": "O código do serviço escolhido."
+}}
 
-        --- SERVIÇOS CANDIDATOS ---
-        {json.dumps(search_results, indent=2, ensure_ascii=False)}
-        
-        --- INÍCIO DA ANÁLISE E RESPOSTA JSON ---
-        """
+**Se NENHUM serviço for adequado:**
+{{
+  "raciocinio": "Seu texto explicando por que nenhum candidato serve.",
+  "codigo_final": "N/A",
+  "palavras_chave_para_nova_busca": "Liste aqui de 3 a 4 substantivos ou termos técnicos mais importantes da query original, separados por espaço. Ex: 'tubo pvc dreno'."
+}}
+
+--- SERVIÇOS CANDIDATOS ---
+{json.dumps(search_results, indent=2, ensure_ascii=False)}
+
+--- INÍCIO DA ANÁLISE E RESPOSTA JSON ---
+"""
         return prompt
 
-    def choose_best_option(self, user_query: str, search_results: list[dict]) -> str | None:
-        if not search_results: return None
+    def choose_best_option(self, user_query: str, search_results: list[dict]) -> dict:
+        """
+        Retorna um dicionário contendo a análise completa e a decisão do LLM.
+        """
+        if not search_results:
+            return {"raciocinio": "Nenhum candidato inicial foi fornecido pelo recuperador.", "codigo_final": "N/A", "palavras_chave_para_nova_busca": user_query}
+        
         prompt = self._build_expert_prompt(user_query, search_results)
         try:
             response = self.client.chat.completions.create(
@@ -50,9 +65,8 @@ class ReasonerAgent:
             print(f"DEBUG: Resposta completa do LLM:\n---\n{full_response_text}\n---")
             
             result_json = json.loads(full_response_text)
-            chosen_code = result_json.get("codigo_final")
+            return result_json
             
-            return chosen_code if chosen_code != "N/A" else None
         except Exception as e:
             print(f"ERRO [Agente de Raciocínio]: {e}")
-            return None
+            return {"raciocinio": f"Erro interno do LLM: {e}", "codigo_final": "N/A", "palavras_chave_para_nova_busca": user_query}

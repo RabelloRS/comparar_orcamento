@@ -123,75 +123,89 @@ app = FastAPI(
           summary="Realiza uma busca semântica refinada por um agente de IA")
 async def buscar_servicos(query: SearchQuery):
     """
-    Fluxo RAG com 4 agentes e logging de diagnóstico detalhado.
-    VERSÃO CORRIGIDA da orquestração dos agentes.
+    Orquestra o fluxo de 4 agentes com um sistema de fallback em 3 estágios.
     """
     print("\n" + "="*80)
-    print(f"INICIANDO DIAGNÓSTICO PARA QUERY: \"{query.texto_busca}\"")
+    print(f"INICIANDO PROCESSO DE BUSCA PARA: \"{query.texto_busca}\"")
     print("="*80)
 
     try:
-        # --- ETAPA 1: Classificação Inicial ---
-        print("\n[AGENTE 1: CLASSIFICADOR] - INÍCIO")
+        # --- TENTATIVA 1: FLUXO PADRÃO ---
+        print("\n[FLUXO PRINCIPAL - TENTATIVA 1]")
         predicted_group, predicted_unit = classifier_instance.classify(query.texto_busca)
-        print(f"[AGENTE 1: CLASSIFICADOR] - FIM -> Grupo: '{predicted_group}', Unidade: '{predicted_unit}'")
-
-        # --- TENTATIVA 1: FLUXO COMPLETO ---
-        print("\n--- INICIANDO BUSCA PARA: \"{query.texto_busca}\" ---")
         retrieved_results, confidence_score, top_index = finder_instance.hybrid_search(
             query.texto_busca, top_k=5, predicted_group=predicted_group, predicted_unit=predicted_unit
         )
+        reasoner_decision = reasoner_instance.choose_best_option(query.texto_busca, retrieved_results)
+        chosen_code = reasoner_decision.get("codigo_final")
 
+        # --- CHECKPOINT 1 ---
+        if chosen_code and chosen_code != "N/A":
+            print("✅ SUCESSO na Tentativa 1.")
+            final_results = sorted(retrieved_results, key=lambda x: str(x['codigo']) == str(chosen_code), reverse=True)
+            return {"query": query, "results": final_results[:query.top_k]}
+
+        # --- TENTATIVA 2: FALLBACK INTERNO (PALAVRAS-CHAVE + VIZINHANÇA) ---
+        print("\n[FALLBACK INTERNO - TENTATIVA 2]")
+        keywords_for_retry = reasoner_decision.get("palavras_chave_para_nova_busca", query.texto_busca)
+        print(f"INFO: Raciocinador falhou na 1ª tentativa. Tentando nova busca com palavras-chave: '{keywords_for_retry}'")
+        
         candidate_pool = {str(item['codigo']): item for item in retrieved_results}
-
-        # --- LÓGICA DE BUSCA NA VIZINHANÇA ---
-        if top_index != -1:
-            print(f"INFO: Melhor candidato inicial no índice {top_index}. Buscando vizinhança...")
-            neighborhood = get_neighborhood(finder_instance.dataframe, top_index, radius=5)
+        
+        # Busca com palavras-chave
+        fallback_results, _, fallback_top_index = finder_instance.hybrid_search(keywords_for_retry, top_k=5)
+        for item in fallback_results:
+            candidate_pool[str(item['codigo'])] = item
+            
+        # Busca na vizinhança do melhor resultado do fallback
+        if fallback_top_index != -1:
+            neighborhood = get_neighborhood(finder_instance.dataframe, fallback_top_index, radius=10)
             for neighbor in neighborhood:
-                # Adiciona ao pool de candidatos, evitando duplicatas
                 if str(neighbor['codigo']) not in candidate_pool:
                     candidate_pool[str(neighbor['codigo'])] = format_neighbor_as_result(neighbor)
+        
+        final_candidates_t2 = list(candidate_pool.values())
+        reasoner_decision_t2 = reasoner_instance.choose_best_option(query.texto_busca, final_candidates_t2)
+        chosen_code_t2 = reasoner_decision_t2.get("codigo_final")
 
-        # --- LÓGICA DE FALLBACK POR PALAVRAS-CHAVE ---
-        if confidence_score < 0.6: # Usamos um limiar mais baixo para este fallback
-            print(f"AVISO: Confiança muito baixa ({confidence_score:.2f}). Tentando fallback com palavras-chave.")
-            core_keywords = extract_core_keywords(query.texto_busca)
-            print(f"INFO: Palavras-chave extraídas: '{core_keywords}'")
-            
-            # Executa uma busca mais simples, sem boosts, apenas com as palavras-chave
-            fallback_results, _, _ = finder_instance.hybrid_search(core_keywords, top_k=5)
-            for item in fallback_results:
-                if str(item['codigo']) not in candidate_pool:
-                    candidate_pool[str(item['codigo'])] = item
+        # --- CHECKPOINT 2 ---
+        if chosen_code_t2 and chosen_code_t2 != "N/A":
+            print("✅ SUCESSO na Tentativa 2.")
+            final_results = sorted(final_candidates_t2, key=lambda x: str(x['codigo']) == str(chosen_code_t2), reverse=True)
+            return {"query": query, "results": final_results[:query.top_k]}
 
-        # --- AGENTE DE RACIOCÍNIO FINAL ---
-        final_candidates = list(candidate_pool.values())
-        print(f"INFO: Enviando {len(final_candidates)} candidatos únicos para o Agente de Raciocínio.")
-        query_para_raciocinio = query.texto_busca
+        # --- TENTATIVA 3: FALLBACK EXTERNO (PESQUISA WEB) ---
+        print("\n[FALLBACK EXTERNO - TENTATIVA 3]")
+        print("AVISO: Fallback interno falhou. Acionando Agente Pesquisador Web.")
+        web_keywords = web_researcher_instance.research_and_enrich(query.texto_busca)
+        
+        if not web_keywords:
+            print("❌ FALHA GERAL: Agente Web não encontrou informações. Retornando os melhores resultados da última tentativa.")
+            return {"query": query, "results": final_candidates_t2[:query.top_k]}
 
-        # --- ETAPA FINAL: Raciocínio (Sempre executado por último) ---
-        print("\n[AGENTE 3: AGENTE DE RACIOCÍNIO] - INÍCIO")
-        if not final_candidates:
-             print("[AGENTE 3: AGENTE DE RACIOCÍNIO] - AVISO: Não há resultados para analisar.")
-             chosen_code = None
+        enriched_query = f"{query.texto_busca} {web_keywords}"
+        print(f"INFO: Query enriquecida pela web: \"{enriched_query}\"")
+        
+        # Executa o fluxo completo com a query enriquecida
+        predicted_group, predicted_unit = classifier_instance.classify(enriched_query)
+        retrieved_results_t3, _, _ = finder_instance.hybrid_search(
+            enriched_query, top_k=5, predicted_group=predicted_group, predicted_unit=predicted_unit
+        )
+        reasoner_decision_t3 = reasoner_instance.choose_best_option(enriched_query, retrieved_results_t3)
+        chosen_code_t3 = reasoner_decision_t3.get("codigo_final")
+        
+        if chosen_code_t3 and chosen_code_t3 != "N/A":
+             print("✅ SUCESSO na Tentativa 3.")
         else:
-            chosen_code = reasoner_instance.choose_best_option(query_para_raciocinio, final_candidates)
-        print(f"[AGENTE 3: AGENTE DE RACIOCÍNIO] - FIM -> Código escolhido: {chosen_code}")
+             print("❌ FALHA GERAL: Nenhuma das 3 tentativas encontrou um resultado satisfatório.")
 
-        # Re-organiza os resultados finais com base na escolha final do Raciocinador
-        final_sorted_results = sorted(final_candidates, key=lambda x: str(x['codigo']) == str(chosen_code), reverse=True)
-
-        print("\n" + "="*80)
-        print("DIAGNÓSTICO COMPLETO FINALIZADO")
-        print("="*80 + "\n")
-
-        return {"query": query, "results": final_sorted_results[:query.top_k]}
+        final_results = sorted(retrieved_results_t3, key=lambda x: str(x['codigo']) == str(chosen_code_t3), reverse=True)
+        return {"query": query, "results": final_results[:query.top_k]}
 
     except Exception as e:
         print(f"ERRO CRÍTICO NO FLUXO PRINCIPAL: {e}")
         import traceback
-        traceback.print_exc() # Imprime o stacktrace completo do erro no console do servidor
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Ocorreu um erro interno: {e}")
 
 @app.get("/", include_in_schema=False)

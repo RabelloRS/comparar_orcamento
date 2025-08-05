@@ -1,0 +1,199 @@
+**Objetivo:** Refatorar o `reasoner.py` e o `main.py` para implementar o fluxo de busca em três estágios (Padrão -\> Fallback Interno -\> Fallback Externo).
+
+#### **Tarefa 1: Aprimorar o Agente de Raciocínio (`reasoner.py`)**
+
+Vamos dar ao nosso Agente 3 a nova capacidade de, em caso de falha, sugerir as palavras-chave para a próxima tentativa.
+
+**Instrução:** Substitua **completamente** o conteúdo do seu arquivo `app/reasoner.py` pela versão abaixo.
+
+**Código para colocar no CANVAS (`app/reasoner.py`):**
+
+```python
+# /app/reasoner.py
+import os
+import json
+from openai import OpenAI
+from dotenv import load_dotenv
+
+load_dotenv()
+
+class ReasonerAgent:
+    """
+    Agente Raciocinador com capacidade de sugerir novas buscas em caso de falha.
+    """
+    def __init__(self):
+        self.client = OpenAI()
+        self.model = "gpt-4o-mini"
+
+    def _build_expert_prompt(self, user_query: str, search_results: list[dict]) -> str:
+        prompt = f"""
+        Você é um engenheiro de especificações sênior e detalhista. Sua tarefa é analisar a solicitação de um usuário e escolher o serviço mais adequado de uma lista de candidatos.
+
+        Siga estritamente os seguintes passos no seu raciocínio:
+        1. **Análise da Solicitação:** Analise a solicitação: "{user_query}". Identifique os componentes principais e as CARACTERÍSTICAS CRÍTICAS (materiais, dimensões, tipos como 'corrugado', 'manual', etc.).
+        2. **Avaliação dos Candidatos:** Avalie cada serviço da lista abaixo, verificando se atende às CARACTERÍSTICAS CRÍTICAS.
+        3. **Conclusão:** Declare qual é o serviço mais apropriado.
+
+        Sua resposta final DEVE ser um objeto JSON formatado EXATAMENTE da seguinte forma:
+
+        **Se você encontrar um serviço adequado:**
+        {{
+          "raciocinio": "Seu texto de análise detalhada aqui.",
+          "codigo_final": "O código do serviço escolhido."
+        }}
+
+        **Se NENHUM serviço for adequado:**
+        {{
+          "raciocinio": "Seu texto explicando por que nenhum candidato serve.",
+          "codigo_final": "N/A",
+          "palavras_chave_para_nova_busca": "Liste aqui de 3 a 4 substantivos ou termos técnicos mais importantes da query original, separados por espaço. Ex: 'tubo pvc dreno'."
+        }}
+
+        --- SERVIÇOS CANDIDATOS ---
+        {json.dumps(search_results, indent=2, ensure_ascii=False)}
+        
+        --- INÍCIO DA ANÁLISE E RESPOSTA JSON ---
+        """
+        return prompt
+
+    def choose_best_option(self, user_query: str, search_results: list[dict]) -> dict:
+        """
+        Retorna um dicionário contendo a análise completa e a decisão do LLM.
+        """
+        if not search_results:
+            return {"raciocinio": "Nenhum candidato inicial foi fornecido pelo recuperador.", "codigo_final": "N/A", "palavras_chave_para_nova_busca": user_query}
+        
+        prompt = self._build_expert_prompt(user_query, search_results)
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.0,
+                response_format={"type": "json_object"}
+            )
+            
+            full_response_text = response.choices[0].message.content
+            print(f"DEBUG: Resposta completa do LLM:\n---\n{full_response_text}\n---")
+            
+            result_json = json.loads(full_response_text)
+            return result_json
+            
+        except Exception as e:
+            print(f"ERRO [Agente de Raciocínio]: {e}")
+            return {"raciocinio": f"Erro interno do LLM: {e}", "codigo_final": "N/A", "palavras_chave_para_nova_busca": user_query}
+```
+
+#### **Tarefa 2: Orquestrar o Novo Fluxo de 3 Tentativas no `main.py`**
+
+Esta é a mudança central, onde implementamos a nova lógica de fallback.
+
+**Instrução:** Substitua **completamente** a função `buscar_servicos` no seu arquivo `app/main.py` pela versão abaixo.
+
+**Código para colocar no CANVAS (função `buscar_servicos` em `app/main.py`):**
+
+```python
+# Em app/main.py, substitua a função buscar_servicos por esta:
+
+@app.post("/buscar",
+          response_model=SearchResponse,
+          tags=["Busca Semântica com Agente"],
+          summary="Realiza uma busca semântica refinada por um agente de IA")
+async def buscar_servicos(query: SearchQuery):
+    """
+    Orquestra o fluxo de 4 agentes com um sistema de fallback em 3 estágios.
+    """
+    print("\n" + "="*80)
+    print(f"INICIANDO PROCESSO DE BUSCA PARA: \"{query.texto_busca}\"")
+    print("="*80)
+
+    try:
+        # --- TENTATIVA 1: FLUXO PADRÃO ---
+        print("\n[FLUXO PRINCIPAL - TENTATIVA 1]")
+        predicted_group, predicted_unit = classifier_instance.classify(query.texto_busca)
+        retrieved_results, confidence_score, top_index = finder_instance.hybrid_search(
+            query.texto_busca, top_k=5, predicted_group=predicted_group, predicted_unit=predicted_unit
+        )
+        reasoner_decision = reasoner_instance.choose_best_option(query.texto_busca, retrieved_results)
+        chosen_code = reasoner_decision.get("codigo_final")
+
+        # --- CHECKPOINT 1 ---
+        if chosen_code and chosen_code != "N/A":
+            print("✅ SUCESSO na Tentativa 1.")
+            final_results = sorted(retrieved_results, key=lambda x: str(x['codigo']) == str(chosen_code), reverse=True)
+            return {"query": query, "results": final_results[:query.top_k]}
+
+        # --- TENTATIVA 2: FALLBACK INTERNO (PALAVRAS-CHAVE + VIZINHANÇA) ---
+        print("\n[FALLBACK INTERNO - TENTATIVA 2]")
+        keywords_for_retry = reasoner_decision.get("palavras_chave_para_nova_busca", query.texto_busca)
+        print(f"INFO: Raciocinador falhou na 1ª tentativa. Tentando nova busca com palavras-chave: '{keywords_for_retry}'")
+        
+        candidate_pool = {str(item['codigo']): item for item in retrieved_results}
+        
+        # Busca com palavras-chave
+        fallback_results, _, fallback_top_index = finder_instance.hybrid_search(keywords_for_retry, top_k=5)
+        for item in fallback_results:
+            candidate_pool[str(item['codigo'])] = item
+            
+        # Busca na vizinhança do melhor resultado do fallback
+        if fallback_top_index != -1:
+            neighborhood = get_neighborhood(finder_instance.dataframe, fallback_top_index, radius=10)
+            for neighbor in neighborhood:
+                if str(neighbor['codigo']) not in candidate_pool:
+                    candidate_pool[str(neighbor['codigo'])] = format_neighbor_as_result(neighbor)
+        
+        final_candidates_t2 = list(candidate_pool.values())
+        reasoner_decision_t2 = reasoner_instance.choose_best_option(query.texto_busca, final_candidates_t2)
+        chosen_code_t2 = reasoner_decision_t2.get("codigo_final")
+
+        # --- CHECKPOINT 2 ---
+        if chosen_code_t2 and chosen_code_t2 != "N/A":
+            print("✅ SUCESSO na Tentativa 2.")
+            final_results = sorted(final_candidates_t2, key=lambda x: str(x['codigo']) == str(chosen_code_t2), reverse=True)
+            return {"query": query, "results": final_results[:query.top_k]}
+
+        # --- TENTATIVA 3: FALLBACK EXTERNO (PESQUISA WEB) ---
+        print("\n[FALLBACK EXTERNO - TENTATIVA 3]")
+        print("AVISO: Fallback interno falhou. Acionando Agente Pesquisador Web.")
+        web_keywords = web_researcher_instance.research_and_enrich(query.texto_busca)
+        
+        if not web_keywords:
+            print("❌ FALHA GERAL: Agente Web não encontrou informações. Retornando os melhores resultados da última tentativa.")
+            return {"query": query, "results": final_candidates_t2[:query.top_k]}
+
+        enriched_query = f"{query.texto_busca} {web_keywords}"
+        print(f"INFO: Query enriquecida pela web: \"{enriched_query}\"")
+        
+        # Executa o fluxo completo com a query enriquecida
+        predicted_group, predicted_unit = classifier_instance.classify(enriched_query)
+        retrieved_results_t3, _, _ = finder_instance.hybrid_search(
+            enriched_query, top_k=5, predicted_group=predicted_group, predicted_unit=predicted_unit
+        )
+        reasoner_decision_t3 = reasoner_instance.choose_best_option(enriched_query, retrieved_results_t3)
+        chosen_code_t3 = reasoner_decision_t3.get("codigo_final")
+        
+        if chosen_code_t3 and chosen_code_t3 != "N/A":
+             print("✅ SUCESSO na Tentativa 3.")
+        else:
+             print("❌ FALHA GERAL: Nenhuma das 3 tentativas encontrou um resultado satisfatório.")
+
+        final_results = sorted(retrieved_results_t3, key=lambda x: str(x['codigo']) == str(chosen_code_t3), reverse=True)
+        return {"query": query, "results": final_results[:query.top_k]}
+
+    except Exception as e:
+        print(f"ERRO CRÍTICO NO FLUXO PRINCIPAL: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Ocorreu um erro interno: {e}")
+```
+
+*Observação para o agente: O código acima é o esqueleto da nova lógica. Garanta que as funções auxiliares `get_neighborhood` e `format_neighbor_as_result` estejam definidas ou sejam importadas corretamente no `main.py`.*
+
+-----
+
+### **Próximos Passos**
+
+1.  **Aplique as Modificações:** Instrua o agente a atualizar os arquivos `reasoner.py` e `main.py`.
+2.  **Reinicie a API:** `uvicorn app.main:app --reload`.
+3.  **Execute a Validação:** Use o `qualitative_test.py` ou a interface de análise para testar uma query que falhava antes, como `"Difusor 3 vias, com caixa plenum e registro, TAM. 7"`. Observe no console do servidor o novo fluxo de 3 tentativas a acontecer.
+
+Com esta reengenharia, seu sistema agora possui uma resiliência e uma capacidade de resolver problemas muito mais próxima à de um especialista humano.
