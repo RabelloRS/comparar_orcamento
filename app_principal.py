@@ -29,8 +29,9 @@ def iniciar_frontend():
     try:
         time.sleep(3)  # Aguarda o backend iniciar
         
-        # Comando para iniciar streamlit
-        cmd = [sys.executable, "-m", "streamlit", "run", "interface.py", "--server.port=8501"]
+        # Comando para iniciar a nova interface Gradio
+        # cmd = [sys.executable, "-m", "streamlit", "run", "interface.py", "--server.port=8501"] # Linha antiga comentada
+        cmd = [sys.executable, "interface_gradio.py"]
         
         print("Iniciando interface frontend...")
         subprocess.run(cmd, cwd=app_dir)
@@ -49,7 +50,7 @@ def main():
     # Verifica se os arquivos necessarios existem
     arquivos_necessarios = [
         "dados/banco_dados_servicos.txt",
-        "interface.py",
+        "interface_gradio.py",
         "app/main.py"
     ]
     
@@ -72,7 +73,7 @@ def main():
         
         # Abre o navegador automaticamente
         print("Abrindo navegador...")
-        webbrowser.open("http://localhost:8501")
+        webbrowser.open("http://localhost:7860")
         
         # Inicia o frontend (processo principal)
         iniciar_frontend()
