@@ -1,0 +1,29 @@
+{
+  "test_cases": [
+    {"query": "tubo pvc corrugado 25mm para dreno", "expected_codes": []},
+    {"query": "concreto para sapata fck 25 mpa", "expected_codes": []},
+    {"query": "tomada 2p+t simples 20a", "expected_codes": []},
+    {"query": "disjuntor termomagnético monopolar 40a", "expected_codes": []},
+    {"query": "argamassa traço 1:3 para contrapiso", "expected_codes": []},
+    {"query": "tinta latex pva sobre massa corrida, duas demãos", "expected_codes": []},
+    {"query": "janela de alumínio de correr 2 folhas 120x100cm", "expected_codes": []},
+    {"query": "cabo de cobre flexível 10 mm2, 750v", "expected_codes": []},
+    {"query": "assentamento de porcelanato 60x60cm", "expected_codes": []},
+    {"query": "impermeabilização com manta asfáltica 3mm", "expected_codes": []},
+    {"query": "bloco de concreto estrutural 14x19x39cm", "expected_codes": []},
+    {"query": "telha cerâmica tipo romana", "expected_codes": []},
+    {"query": "forro de gesso acartonado (drywall)", "expected_codes": []},
+    {"query": "bacia sanitária com caixa acoplada", "expected_codes": []},
+    {"query": "luminária de embutir led 18w", "expected_codes": []},
+    {"query": "vergalhão de aço ca-50 diâmetro 10mm", "expected_codes": []},
+    {"query": "porta de madeira semi-oca para pintura 80x210cm", "expected_codes": []},
+    {"query": "registro de gaveta bruto 3/4 polegada", "expected_codes": []},
+    {"query": "escavação mecanizada de vala", "expected_codes": []},
+    {"query": "reaterro compactado manualmente", "expected_codes": []},
+    {"query": "instalação de eletroduto de pvc rígido 20mm", "expected_codes": []},
+    {"query": "chapa de compensado plastificado 18mm", "expected_codes": []},
+    {"query": "serviço de topografia para locação de obra", "expected_codes": []},
+    {"query": "ensaio de resistência à compressão do concreto", "expected_codes": []},
+    {"query": "demolição de alvenaria de tijolo", "expected_codes": []}
+  ]
+}
