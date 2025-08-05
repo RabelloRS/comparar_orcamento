@@ -9,13 +9,13 @@ from pathlib import Path
 # Adiciona o diretorio da aplicacao ao path
 app_dir = Path(__file__).parent
 sys.path.insert(0, str(app_dir))
-sys.path.insert(0, str(app_dir / "app"))
+sys.path.insert(0, str(app_dir / "backend" / "app"))
 
 def iniciar_backend():
     """Inicia o servidor FastAPI"""
     try:
         import uvicorn
-        from app.main import app
+        from backend.app.main import app
         
         print("Iniciando servidor backend...")
         uvicorn.run(app, host="127.0.0.1", port=8000, log_level="info")
@@ -31,7 +31,7 @@ def iniciar_frontend():
         
         # Comando para iniciar a nova interface Gradio
         # cmd = [sys.executable, "-m", "streamlit", "run", "interface.py", "--server.port=8501"] # Linha antiga comentada
-        cmd = [sys.executable, "interface_gradio.py"]
+        cmd = [sys.executable, "frontend/interface_gradio.py"]
         
         print("Iniciando interface frontend...")
         subprocess.run(cmd, cwd=app_dir)
@@ -50,8 +50,8 @@ def main():
     # Verifica se os arquivos necessarios existem
     arquivos_necessarios = [
         "dados/banco_dados_servicos.txt",
-        "interface_gradio.py",
-        "app/main.py"
+        "frontend/interface_gradio.py",
+        "backend/app/main.py"
     ]
     
     for arquivo in arquivos_necessarios:
