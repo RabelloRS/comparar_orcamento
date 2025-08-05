@@ -87,7 +87,7 @@ async def lifespan(app: FastAPI):
     global finder_instance, reasoner_instance, classifier_instance, web_researcher_instance
     
     # Aponte o Finder para o banco de dados principal e bruto
-    DATA_FILE_PATH = os.path.join(os.path.dirname(__file__), '..', 'dados', 'banco_dados_servicos.txt')
+    DATA_FILE_PATH = os.path.join(os.path.dirname(__file__), '..', '..', 'dados', 'banco_dados_servicos.txt')
     
     finder_instance = ServicoFinder()
     finder_instance.load_and_index_services(data_filepath=DATA_FILE_PATH)
