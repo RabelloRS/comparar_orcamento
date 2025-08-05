@@ -1,0 +1,143 @@
+O Plano de Ação Definitivo (A "Reengenharia")
+Com base neste diagnóstico, precisamos de fazer uma "revisão geral" nos nossos agentes para consertar estas falhas fundamentais. Abaixo está a instrução para o seu agente de programação.
+
+Objetivo: Refatorar os Agentes 1 e 3 para aumentar drasticamente a sua precisão e robustez, e ajustar a lógica de confiança para tornar o sistema mais inteligente.
+
+Tarefa 1: Substituir o Classificador (Agente 1) por um LLM
+O modelo LinearSVC não é suficiente. Vamos substituí-lo pela inteligência de um LLM, que é muito superior em tarefas de classificação de "tiro único" (zero-shot).
+
+Instrução: Substitua completamente o conteúdo de app/classifier_agent.py.
+
+Código para colocar no CANVAS (app/classifier_agent.py):
+
+Python
+
+# /app/classifier_agent.py
+import pandas as pd
+import os
+from openai import OpenAI
+
+class ClassifierAgent:
+    """
+    Usa um LLM (gpt-3.5-turbo) para realizar uma classificação de alta precisão.
+    """
+    def __init__(self, data_filepath):
+        self.client = OpenAI() # Reutiliza a chave do .env
+        self.model = "gpt-3.5-turbo"
+        
+        # Carrega os grupos e unidades ÚNICOS para dar como opções ao LLM
+        df = pd.read_csv(data_filepath)
+        self.grupos_unicos = df['descricao_do_grupo_de_servico'].dropna().unique().tolist()
+        self.unidades_unicas = df['unidade_de_medida'].dropna().unique().tolist()
+        print("INFO: Agente Classificador baseado em LLM inicializado com sucesso.")
+
+    def _build_prompt(self, query: str):
+        prompt = f"""
+        Você é um engenheiro de orçamentos especialista em classificar serviços de construção civil. Sua tarefa é analisar a solicitação do usuário e retornar a classificação mais provável para o 'Grupo de Serviço' e a 'Unidade de Medida'.
+
+        Solicitação do Usuário: "{query}"
+
+        Responda APENAS com um formato JSON válido contendo as chaves "grupo" e "unidade". Escolha o grupo da lista de GRUPOS VÁLIDOS e a unidade da lista de UNIDADES VÁLIDAS.
+
+        GRUPOS VÁLIDOS:
+        {', '.join(self.grupos_unicos[:50])} 
+        ... (e outros)
+
+        UNIDADES VÁLIDAS:
+        {', '.join(self.unidades_unicas)}
+
+        JSON de Resposta:
+        """
+        return prompt
+
+    def classify(self, query: str) -> (str, str):
+        prompt = self._build_prompt(query)
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.0,
+                response_format={"type": "json_object"}
+            )
+            
+            result = json.loads(response.choices[0].message.content)
+            predicted_group = result.get("grupo", "N/A")
+            predicted_unit = result.get("unidade", "N/A")
+            
+            print(f"DEBUG [Classificador LLM]: Query='{query}' -> Grupo='{predicted_group}', Unidade='{predicted_unit}'")
+            return predicted_group, predicted_unit
+        except Exception as e:
+            print(f"ERRO [Classificador LLM]: {e}")
+            return "N/A", "N/A"
+Tarefa 2: Robustecer o Raciocinador (Agente 3) com Saída JSON
+Para eliminar os bugs de extração, vamos forçar o LLM a nos responder sempre em formato JSON.
+
+Instrução: Substitua completamente o conteúdo de app/reasoner.py.
+
+Código para colocar no CANVAS (app/reasoner.py):
+
+Python
+
+# /app/reasoner.py
+import os
+import re
+import json
+from openai import OpenAI
+from dotenv import load_dotenv
+
+load_dotenv()
+
+class ReasonerAgent:
+    def __init__(self):
+        self.client = OpenAI()
+        self.model = "gpt-3.5-turbo"
+
+    def _build_cot_prompt(self, user_query: str, search_results: list[dict]) -> str:
+        prompt = f"""
+        Você é um engenheiro orçamentista sênior. Sua tarefa é analisar a solicitação do usuário e os serviços candidatos encontrados em nosso banco de dados, e escolher o serviço mais adequado.
+
+        Siga estritamente os seguintes passos no seu raciocínio:
+        1. **Análise da Solicitação:** Analise a solicitação: "{user_query}". Identifique os componentes, materiais e ações mais importantes.
+        2. **Avaliação dos Candidatos:** Avalie cada serviço da lista abaixo, comparando-o com sua análise.
+        3. **Conclusão:** Declare qual é o serviço mais apropriado.
+
+        Após o seu raciocínio, sua resposta final DEVE ser um objeto JSON formatado EXATAMENTE da seguinte forma:
+        {{
+          "raciocinio": "Seu texto de análise detalhada aqui.",
+          "codigo_final": "O código do serviço escolhido aqui. Se nenhum for adequado, retorne 'N/A'."
+        }}
+
+        --- SERVIÇOS CANDIDATOS ---
+        {json.dumps(search_results, indent=2, ensure_ascii=False)}
+        
+        --- INÍCIO DA ANÁLISE E RESPOSTA JSON ---
+        """
+        return prompt
+
+    def choose_best_option(self, user_query: str, search_results: list[dict]) -> str | None:
+        if not search_results: return None
+        prompt = self._build_cot_prompt(user_query, search_results)
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.0,
+                response_format={"type": "json_object"}
+            )
+            
+            full_response_text = response.choices[0].message.content
+            print(f"DEBUG: Resposta completa do LLM:\n---\n{full_response_text}\n---")
+            
+            result_json = json.loads(full_response_text)
+            chosen_code = result_json.get("codigo_final")
+            
+            return chosen_code if chosen_code != "N/A" else None
+        except Exception as e:
+            print(f"ERRO [Agente de Raciocínio]: {e}")
+            return None
+Tarefa 3: Re-ativar e Validar
+Reinicie o Servidor: uvicorn app.main:app --reload.
+
+Execute a Validação Final: Rode o validator.py com a suíte test_suite_v3.json.
+
+Com estas correções, o Classificador será muito mais preciso, o Raciocinador será livre de bugs de extração e a performance geral do sistema deverá, finalmente, atingir o patamar de alta assertividade que temos como objetivo.

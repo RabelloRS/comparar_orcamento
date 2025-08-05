@@ -1,0 +1,131 @@
+Objetivo: Otimizar drasticamente o tempo de inicialização do servidor, implementando um sistema de cache robusto no finder.py que salva e carrega os índices pré-processados.
+
+Tarefa Única: Atualizar o app/finder.py com a Lógica de Cache
+
+Instrução: Substitua completamente o conteúdo do seu arquivo app/finder.py pela versão final e otimizada abaixo.
+
+Código para colocar no CANVAS (app/finder.py - Versão Final com Cache):
+
+Python
+
+# /app/finder.py
+import pandas as pd
+from sentence_transformers import SentenceTransformer, util
+import torch
+import time
+import os
+from rank_bm25 import BM25Okapi
+from app.text_utils import TextNormalizer
+import pickle # Biblioteca para salvar/carregar objetos Python
+
+class ServicoFinder:
+    """
+    Versão final e otimizada do Recuperador.
+    Inclui um sistema de cache robusto para uma inicialização quase instantânea.
+    """
+    def __init__(self, model_name='paraphrase-multilingual-mpnet-base-v2'):
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        self.model = SentenceTransformer(model_name, device=self.device)
+        self.normalizer = TextNormalizer()
+        self.dataframe = None
+        self.corpus_embeddings = None
+        self.bm25_index = None
+        print("INFO: ServicoFinder (versão com cache) inicializado.")
+
+    def _convert_price_to_float(self, price_value):
+        # ... (código da função de conversão de preço)
+        if isinstance(price_value, (int, float)): return float(price_value)
+        if isinstance(price_value, str):
+            try: return float(price_value.replace('.', '').replace(',', '.'))
+            except (ValueError, AttributeError): return 0.0
+        return 0.0
+
+    def load_and_index_services(self, data_filepath, force_reindex=False):
+        """
+        Carrega os dados e índices. Se um cache válido existir, carrega dele.
+        Caso contrário, processa os dados e cria o cache para futuras execuções.
+        """
+        cache_dir = os.path.join('dados', 'cache')
+        os.makedirs(cache_dir, exist_ok=True)
+        
+        # Define os caminhos para os arquivos de cache
+        df_cache_path = os.path.join(cache_dir, 'dataframe.pkl')
+        bm25_cache_path = os.path.join(cache_dir, 'bm25_index.pkl')
+        embeddings_cache_path = os.path.join(cache_dir, 'embeddings.pt')
+
+        # --- LÓGICA DE CARREGAMENTO DO CACHE ---
+        if not force_reindex and all(os.path.exists(p) for p in [df_cache_path, bm25_cache_path, embeddings_cache_path]):
+            print("\nINFO: Cache válido encontrado! Carregando índices pré-processados...")
+            
+            self.dataframe = pd.read_pickle(df_cache_path)
+            with open(bm25_cache_path, 'rb') as f:
+                self.bm25_index = pickle.load(f)
+            self.corpus_embeddings = torch.load(embeddings_cache_path, map_location=self.device)
+            
+            print("✅ SUCESSO: Índices carregados do cache. Inicialização rápida concluída.")
+            return
+
+        # --- LÓGICA DE PROCESSAMENTO (se não houver cache) ---
+        print("\nAVISO: Cache não encontrado ou 'force_reindex' ativado. Iniciando processamento completo...")
+        
+        # 1. Pré-processamento dos dados
+        df = pd.read_csv(data_filepath, dtype={'codigo_da_composicao': str})
+        df.rename(columns={
+            'codigo_da_composicao': 'codigo', 'descricao_completa_do_servico_prestado': 'descricao_original',
+            'unidade_de_medida': 'unidade', 'orgao_responsavel_pela_divulgacao': 'fonte',
+            'descricao_do_grupo_de_servico': 'grupo', 'precos_unitarios_dos_servicos': 'preco'
+        }, inplace=True, errors='ignore')
+        df.fillna('', inplace=True)
+        df['descricao_normalizada'] = df['descricao_original'].apply(self.normalizer.normalize)
+        self.dataframe = df
+        
+        # 2. Indexação e Geração de Embeddings
+        corpus = self.dataframe['descricao_normalizada'].tolist()
+        
+        print("INFO: Criando índice de palavra-chave (BM25)...")
+        tokenized_corpus = [doc.split(" ") for doc in corpus]
+        self.bm25_index = BM25Okapi(tokenized_corpus)
+        
+        print("INFO: Gerando embeddings semânticos... (Isso pode demorar)")
+        self.corpus_embeddings = self.model.encode(corpus, convert_to_tensor=True, show_progress_bar=True, device=self.device)
+        
+        # 3. Salvar os novos índices no cache
+        print("\nINFO: Salvando novos índices no cache para futuras inicializações...")
+        self.dataframe.to_pickle(df_cache_path)
+        with open(bm25_cache_path, 'wb') as f:
+            pickle.dump(self.bm25_index, f)
+        torch.save(self.corpus_embeddings, embeddings_cache_path)
+        
+        print("✅ SUCESSO: Processamento concluído e cache criado.")
+
+    # ... (Os métodos de busca como `hybrid_search` permanecem os mesmos) ...
+    def find_similar_semantic(self, query: str, top_k: int):
+        # ...
+    def find_similar_keyword(self, query: str, top_k: int):
+        # ...
+    def hybrid_search(self, query: str, top_k: int = 5, alpha: float = 0.5, 
+                      predicted_group: str = None, predicted_unit: str = None, 
+                      group_boost: float = 1.5, unit_boost: float = 1.2):
+        # ...
+Como Validar a Correção
+Agora o agente deve seguir estes passos para ver a mágica acontecer:
+
+Aplique a Correção: Substitua o arquivo app/finder.py pela nova versão com a lógica de cache.
+
+Limpe o Cache Antigo (Opcional, mas recomendado): Apague a pasta /dados/cache para garantir que tudo seja reconstruído do zero na primeira vez.
+
+Execute a Primeira Inicialização (A Lenta):
+
+Inicie o servidor: uvicorn app.main:app --reload.
+
+Observe os logs: Você verá as mensagens "AVISO: Cache não encontrado...", seguidas pelo processo demorado de criação do índice e geração dos embeddings. Ao final, ele dirá "SUCESSO: Processamento concluído e cache criado."
+
+Execute a Segunda Inicialização (A Rápida):
+
+Pare o servidor (Ctrl+C).
+
+Inicie-o novamente: uvicorn app.main:app --reload.
+
+Observe os logs: Desta vez, você verá a mensagem "INFO: Cache válido encontrado! Carregando índices pré-processados..." e o servidor estará pronto para uso em poucos segundos.
+
+Com esta correção, você resolveu um dos principais gargalos de performance do sistema, tornando-o não apenas inteligente, mas também rápido e eficiente para o uso diário.

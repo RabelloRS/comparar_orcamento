@@ -5,11 +5,12 @@ import torch
 import os
 from rank_bm25 import BM25Okapi
 from app.text_utils import TextNormalizer # Importa nosso normalizador validado
+import pickle # Biblioteca para salvar/carregar objetos Python
 
 class ServicoFinder:
     """
-    Versão estável e robusta do Recuperador.
-    Processa o banco de dados principal diretamente na inicialização.
+    Versão final e otimizada do Recuperador.
+    Inclui um sistema de cache robusto para uma inicialização quase instantânea.
     """
     def __init__(self, model_name='paraphrase-multilingual-mpnet-base-v2'):
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -18,7 +19,22 @@ class ServicoFinder:
         self.dataframe = None
         self.corpus_embeddings = None
         self.bm25_index = None
-        print("INFO: ServicoFinder (versão estável) inicializado.")
+        print("INFO: ServicoFinder (versão com cache) inicializado.")
+
+    def _convert_price_to_float(self, price_value):
+        """
+        Converte um valor de preço (que pode ser string com vírgula) para float.
+        Retorna 0.0 se a conversão falhar.
+        """
+        if isinstance(price_value, (int, float)):
+            return float(price_value)
+        if isinstance(price_value, str):
+            try:
+                # Substitui a vírgula por ponto e converte para float
+                return float(price_value.replace('.', '').replace(',', '.'))
+            except (ValueError, AttributeError):
+                return 0.0
+        return 0.0
 
     def _preprocess_data(self, filepath):
         """
@@ -57,12 +73,32 @@ class ServicoFinder:
 
     def load_and_index_services(self, data_filepath, force_reindex=False):
         """
-        Carrega os dados, gera os índices e embeddings.
+        Carrega os dados e índices. Se um cache válido existir, carrega dele.
+        Caso contrário, processa os dados e cria o cache para futuras execuções.
         """
-        # A lógica de cache pode ser mantida para acelerar reinicializações
         cache_dir = os.path.join('dados', 'cache')
-        # ... (O agente pode manter a lógica de cache aqui se desejar)
+        os.makedirs(cache_dir, exist_ok=True)
+        
+        # Define os caminhos para os arquivos de cache
+        df_cache_path = os.path.join(cache_dir, 'dataframe.pkl')
+        bm25_cache_path = os.path.join(cache_dir, 'bm25_index.pkl')
+        embeddings_cache_path = os.path.join(cache_dir, 'embeddings.pt')
 
+        # --- LÓGICA DE CARREGAMENTO DO CACHE ---
+        if not force_reindex and all(os.path.exists(p) for p in [df_cache_path, bm25_cache_path, embeddings_cache_path]):
+            print("\nINFO: Cache válido encontrado! Carregando índices pré-processados...")
+            
+            self.dataframe = pd.read_pickle(df_cache_path)
+            with open(bm25_cache_path, 'rb') as f:
+                self.bm25_index = pickle.load(f)
+            self.corpus_embeddings = torch.load(embeddings_cache_path, map_location=self.device)
+            
+            print("✅ SUCESSO: Índices carregados do cache. Inicialização rápida concluída.")
+            return
+
+        # --- LÓGICA DE PROCESSAMENTO (se não houver cache) ---
+        print("\nAVISO: Cache não encontrado ou 'force_reindex' ativado. Iniciando processamento completo...")
+        
         self.dataframe = self._preprocess_data(data_filepath)
         
         corpus = self.dataframe['descricao'].tolist()
@@ -71,10 +107,17 @@ class ServicoFinder:
         tokenized_corpus = [doc.split(" ") for doc in corpus]
         self.bm25_index = BM25Okapi(tokenized_corpus)
         
-        print("INFO: Gerando embeddings semânticos... (Isso pode demorar na primeira vez)")
+        print("INFO: Gerando embeddings semânticos... (Isso pode demorar)")
         self.corpus_embeddings = self.model.encode(corpus, convert_to_tensor=True, show_progress_bar=True, device=self.device)
         
-        print("INFO: Indexação concluída.")
+        # 3. Salvar os novos índices no cache
+        print("\nINFO: Salvando novos índices no cache para futuras inicializações...")
+        self.dataframe.to_pickle(df_cache_path)
+        with open(bm25_cache_path, 'wb') as f:
+            pickle.dump(self.bm25_index, f)
+        torch.save(self.corpus_embeddings, embeddings_cache_path)
+        
+        print("✅ SUCESSO: Processamento concluído e cache criado.")
 
     # Os métodos de busca (`find_similar_semantic`, `find_similar_keyword`, `hybrid_search`)
     # permanecem exatamente os mesmos da versão anterior, pois já estão corretos e otimizados.
@@ -129,7 +172,7 @@ class ServicoFinder:
                 'semantic_score': float(semantic_score_map.get(idx, 0.0)),
                 'codigo': item.get('codigo', 'N/A'),
                 'descricao': item.get('descricao_original', 'N/A'), # Retorna a descrição original para o usuário
-                'preco': item.get('preco', 0.0),
+                'preco': self._convert_price_to_float(item.get('preco')),
                 'unidade': item.get('unidade', 'N/A'),
                 'fonte': item.get('fonte', 'N/A')
             })

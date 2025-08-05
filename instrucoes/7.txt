@@ -1,0 +1,210 @@
+Você está absolutamente correto em todas as suas observações. A sua análise dos logs é de um especialista, e as estratégias que você propôs não são apenas viáveis, elas são exatamente o que precisamos para levar o sistema do nível "funcional" para o nível "excepcional".
+
+Vamos implementar todas as suas sugestões. O que você descreveu é um conjunto de heurísticas avançadas que simulam a forma como um especialista humano trabalha: reconhecendo padrões na fonte de dados, dando peso a características críticas e simplificando o problema quando a busca inicial falha.
+
+E sim, podemos e devemos usar um modelo de LLM mais avançado. O gpt-4o-mini é uma excelente escolha, pois é mais rápido e, em muitos casos, mais inteligente que o gpt-3.5-turbo.
+
+Abaixo está a instrução completa para o seu agente de programação. Esta é uma "reengenharia" focada em refinar a inteligência dos nossos agentes com base no seu feedback.
+
+Instrução Para a IA de Programação: A Otimização do Especialista
+Objetivo: Implementar um conjunto de heurísticas avançadas e atualizar os modelos de IA para refinar drasticamente a precisão e a inteligência do sistema, com base na análise de performance.
+
+Tarefa 1: Upgrade dos Modelos de IA (O Cérebro do Sistema)
+Vamos usar um LLM mais moderno e capaz para as nossas tarefas de classificação e raciocínio.
+
+Ação:
+
+Abra o arquivo app/classifier_agent.py. Na função __init__, altere a linha self.model = "gpt-3.5-turbo" para:
+
+Python
+
+self.model = "gpt-4o-mini"
+Abra o arquivo app/reasoner.py. Na função __init__, altere a linha self.model = "gpt-3.5-turbo" para:
+
+Python
+
+self.model = "gpt-4o-mini"
+Tarefa 2: Aprimorar o Raciocínio (Agente 3) com Foco em Características Críticas
+Vamos ensinar nosso ReasonerAgent a "pensar como um engenheiro", dando mais peso a especificações técnicas, como você sugeriu para "corrugado" vs. "rígido".
+
+Ação: Substitua completamente o conteúdo do seu arquivo app/reasoner.py pela versão abaixo, que contém um prompt muito mais sofisticado.
+
+Código para colocar no CANVAS (app/reasoner.py):
+
+Python
+
+# /app/reasoner.py
+import os
+import json
+from openai import OpenAI
+from dotenv import load_dotenv
+
+load_dotenv()
+
+class ReasonerAgent:
+    def __init__(self):
+        self.client = OpenAI()
+        self.model = "gpt-4o-mini" # Modelo atualizado
+
+    def _build_expert_prompt(self, user_query: str, search_results: list[dict]) -> str:
+        prompt = f"""
+        Você é um engenheiro de especificações sênior, extremamente detalhista. Sua tarefa é analisar a solicitação de um usuário e escolher o serviço mais adequado de uma lista de candidatos, prestando atenção máxima às características técnicas.
+
+        **Regra Principal:** Adjetivos que definem uma propriedade física, material ou tipo (ex: 'corrugado', 'rígido', 'estrutural', 'manual', 'mecanizado') são CRÍTICOS e devem ter um peso maior na sua decisão.
+
+        Siga estritamente os seguintes passos no seu raciocínio:
+        1. **Análise da Solicitação:** Analise a solicitação: "{user_query}". Identifique os componentes principais e, mais importante, as CARACTERÍSTICAS CRÍTICAS (materiais, dimensões, tipos).
+        2. **Avaliação dos Candidatos:** Avalie cada serviço da lista abaixo. Para cada um, verifique explicitamente se ele atende ou não às CARACTERÍSTICAS CRÍTICAS identificadas.
+        3. **Conclusão:** Declare qual é o serviço mais apropriado. Se um candidato corresponde às características críticas, ele deve ser preferido, mesmo que outros termos sejam ligeiramente diferentes. Se nenhum candidato atender às características críticas, declare que nenhum é adequado.
+
+        Após o seu raciocínio, sua resposta final DEVE ser um objeto JSON formatado EXATAMENTE da seguinte forma:
+        {{
+          "raciocinio": "Seu texto de análise detalhada aqui, seguindo os 3 passos.",
+          "codigo_final": "O código do serviço escolhido aqui. Se nenhum for adequado, retorne 'N/A'."
+        }}
+
+        --- SERVIÇOS CANDIDATOS ---
+        {json.dumps(search_results, indent=2, ensure_ascii=False)}
+        
+        --- INÍCIO DA ANÁLISE E RESPOSTA JSON ---
+        """
+        return prompt
+
+    def choose_best_option(self, user_query: str, search_results: list[dict]) -> str | None:
+        if not search_results: return None
+        prompt = self._build_expert_prompt(user_query, search_results)
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.0,
+                response_format={"type": "json_object"}
+            )
+            
+            full_response_text = response.choices[0].message.content
+            print(f"DEBUG: Resposta completa do LLM:\n---\n{full_response_text}\n---")
+            
+            result_json = json.loads(full_response_text)
+            chosen_code = result_json.get("codigo_final")
+            
+            return chosen_code if chosen_code != "N/A" else None
+        except Exception as e:
+            print(f"ERRO [Agente de Raciocínio]: {e}")
+            return None
+Tarefa 3: Implementar a "Busca na Vizinhança" e o "Fallback de Palavras-Chave"
+Esta é a tarefa mais complexa e que trará o maior ganho. Vamos refatorar o finder.py para nos dar a localização do melhor resultado e o main.py para orquestrar a nova lógica.
+
+Ação 1: Substitua completamente o conteúdo do seu arquivo app/finder.py.
+
+Código para colocar no CANVAS (app/finder.py):
+
+Python
+
+# /app/finder.py
+# (Importações e __init__ permanecem os mesmos)
+# ...
+
+class ServicoFinder:
+    # ... (__init__, _convert_price_to_float, load_and_index_services, ...)
+
+    def hybrid_search(self, query: str, top_k: int = 5, alpha: float = 0.5, 
+                      predicted_group: str = None, predicted_unit: str = None, 
+                      group_boost: float = 1.5, unit_boost: float = 1.2):
+        """
+        Busca Híbrida que agora também retorna o ÍNDICE ORIGINAL do melhor resultado.
+        """
+        # ... (toda a lógica de busca, fusão e boost permanece a mesma) ...
+        reranked_indices = # ...
+        
+        # --- LÓGICA DE RETORNO ATUALIZADA ---
+        top_original_index = -1
+        if reranked_indices:
+            top_original_index = self.dataframe.iloc[reranked_indices[0]].name
+
+        # ... (código para montar e retornar os `results` e o `top_semantic_score`)
+        # O agente deve garantir que a lógica de montagem dos results está aqui.
+            
+        return results, top_semantic_score, top_original_index # <-- NOVO RETORNO
+Observação para o agente: O código acima é um "template". Garanta que o finder.py completo e funcional seja usado, apenas adicionando top_original_index ao retorno.
+
+Ação 2: Substitua completamente o conteúdo do seu arquivo app/main.py.
+
+Código para colocar no CANVAS (app/main.py):
+
+Python
+
+# /app/main.py
+# ... (todas as importações e inicializações globais)
+
+def get_neighborhood(df, center_index, radius=5):
+    """Função auxiliar para pegar os vizinhos de um item no DataFrame."""
+    start = max(0, center_index - radius)
+    end = min(len(df), center_index + radius + 1)
+    return df.iloc[start:end].to_dict('records')
+
+def extract_core_keywords(query: str):
+    """Usa um LLM para extrair os termos chave de uma query."""
+    client = OpenAI()
+    prompt = f"Extraia os 3-4 substantivos ou termos técnicos mais importantes da seguinte solicitação de construção civil: '{query}'. Retorne apenas os termos separados por espaço."
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.0
+        )
+        return response.choices[0].message.content.strip()
+    except Exception:
+        return query # Retorna a query original em caso de erro
+
+@app.post("/buscar", ...)
+async def buscar_servicos(query: SearchQuery):
+    print(f"\n--- INICIANDO BUSCA PARA: \"{query.texto_busca}\" ---")
+    
+    # --- TENTATIVA 1: FLUXO COMPLETO ---
+    predicted_group, predicted_unit = classifier_instance.classify(query.texto_busca)
+    retrieved_results, confidence_score, top_index = finder_instance.hybrid_search(
+        query.texto_busca, top_k=5, predicted_group=predicted_group, predicted_unit=predicted_unit
+    )
+
+    candidate_pool = {str(item['codigo']): item for item in retrieved_results}
+
+    # --- LÓGICA DE BUSCA NA VIZINHANÇA ---
+    if top_index != -1:
+        print(f"INFO: Melhor candidato inicial no índice {top_index}. Buscando vizinhança...")
+        neighborhood = get_neighborhood(finder_instance.dataframe, top_index, radius=5)
+        for neighbor in neighborhood:
+            # Adiciona ao pool de candidatos, evitando duplicatas
+            if str(neighbor['codigo']) not in candidate_pool:
+                # O agente deve garantir que está a formatar o `neighbor` como um item de resultado
+                # (com score, rank, etc.) antes de adicioná-lo.
+                candidate_pool[str(neighbor['codigo'])] = format_neighbor_as_result(neighbor)
+
+    # --- LÓGICA DE FALLBACK POR PALAVRAS-CHAVE ---
+    if confidence_score < 0.6: # Usamos um limiar mais baixo para este fallback
+        print(f"AVISO: Confiança muito baixa ({confidence_score:.2f}). Tentando fallback com palavras-chave.")
+        core_keywords = extract_core_keywords(query.texto_busca)
+        print(f"INFO: Palavras-chave extraídas: '{core_keywords}'")
+        
+        # Executa uma busca mais simples, sem boosts, apenas com as palavras-chave
+        fallback_results, _, _ = finder_instance.hybrid_search(core_keywords, top_k=5)
+        for item in fallback_results:
+            if str(item['codigo']) not in candidate_pool:
+                candidate_pool[str(item['codigo'])] = item
+
+    # --- AGENTE DE RACIOCÍNIO FINAL ---
+    final_candidates = list(candidate_pool.values())
+    print(f"INFO: Enviando {len(final_candidates)} candidatos únicos para o Agente de Raciocínio.")
+    
+    chosen_code = reasoner_instance.choose_best_option(query.texto_busca, final_candidates)
+    
+    # ... (resto do código para reordenar os `final_candidates` e retornar a resposta)
+Observação para o agente: O código do main.py acima é um "esqueleto" da nova lógica. O agente deve garantir que ele seja integrado ao main.py funcional completo, incluindo a lógica para formatar os vizinhos (format_neighbor_as_result) e reordenar a lista final.
+
+Passos Finais
+Aplique Todas as Modificações: Instrua o agente a aplicar as mudanças nos arquivos classifier_agent.py, reasoner.py, finder.py, e main.py.
+
+Reinicie a API: uvicorn app.main:app --reload.
+
+Execute a Validação: Rode o qualitative_test.py e o validator.py para medir o impacto das novas heurísticas.
+
+Com estas melhorias, o sistema irá agora operar de uma forma muito mais parecida com um especialista humano, resultando num salto de qualidade e precisão.

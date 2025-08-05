@@ -1,0 +1,26 @@
+id,query,expected_codes,predicted_codes,top_1_hit,top_3_hit
+1,tubo pvc corrugado 25mm para dreno,[],"['10004062', '102705', '10002061']",False,False
+2,concreto para sapata fck 25 mpa,[],"['11.01.130', '11.01.290', '11.01.630']",False,False
+3,tomada 2p+t simples 20a,[],"['9082018', '9082094', '61.15.020']",False,False
+4,disjuntor termomagnético monopolar 40a,[],"['9008085', '9008090', '9008080']",False,False
+5,argamassa traço 1:3 para contrapiso,[],"['87372', '13002103', '24.02.490']",False,False
+6,"tinta latex pva sobre massa corrida, duas demãos",[],"['15001011', '15001010', '15001016']",False,False
+7,janela de alumínio de correr 2 folhas 120x100cm,[],"['94570', '8002067', '8002068']",False,False
+8,"cabo de cobre flexível 10 mm2, 750v",[],"['9003078', '9003076', '39.24.174']",False,False
+9,assentamento de porcelanato 60x60cm,[],"['87263', '88650', '6037000']",False,False
+10,impermeabilização com manta asfáltica 3mm,[],"['5003008', '5003011', '5003009']",False,False
+11,bloco de concreto estrutural 14x19x39cm,[],"['14.01.050', '14.11.261', '14.11.271']",False,False
+12,telha cerâmica tipo romana,[],"['16.02.030', '94442', '94443']",False,False
+13,forro de gesso acartonado (drywall),[],"['12001042', '12001043', '4003071']",False,False
+14,bacia sanitária com caixa acoplada,[],"['10013003', '10013001', '10013004']",False,False
+15,luminária de embutir led 18w,[],"['9009117', '9009111', '9009118']",False,False
+16,vergalhão de aço ca-50 diâmetro 10mm,[],"['92803', '7010000', '7009000']",False,False
+17,porta de madeira semi-oca para pintura 80x210cm,[],"['90822', '90820', '90824']",False,False
+18,registro de gaveta bruto 3/4 polegada,[],"['47.01.020', '10005031', '47.02.020']",False,False
+19,escavação mecanizada de vala,[],"['07.02.020', '96525', '07.02.040']",False,False
+20,reaterro compactado manualmente,[],"['06.11.020', '4008000', '07.11.020']",False,False
+21,instalação de eletroduto de pvc rígido 20mm,[],"['9002001', '9002054', '9002009']",False,False
+22,chapa de compensado plastificado 18mm,[],"['27.02.050', '3108011', '3108015']",False,False
+23,serviço de topografia para locação de obra,[],"['105136', '105008', '3032000']",False,False
+24,ensaio de resistência à compressão do concreto,[],"['20006002', '97097', '2006101']",False,False
+25,demolição de alvenaria de tijolo,[],"['97623', '97624', '8030000']",False,False
