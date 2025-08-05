@@ -4,6 +4,7 @@ import requests
 import pandas as pd
 import io
 import os
+from datetime import datetime
 
 # --- Configuração da Página ---
 st.set_page_config(
@@ -14,46 +15,26 @@ st.set_page_config(
 
 # --- Constantes e Cache ---
 API_URL = "http://localhost:8000/buscar"
-DATABASE_PATH = os.path.join(os.path.dirname(__file__), "dados", "banco_dados_servicos.txt")  # Caminho absoluto para o banco de dados
+DATABASE_PATH = "dados/banco_dados_servicos.txt"
+LOG_FILE = "processing_log.csv"
+TEMP_DIR = "temp_files"
+
+# Garante que o diretório de arquivos temporários exista
+os.makedirs(TEMP_DIR, exist_ok=True)
 
 @st.cache_data
 def load_full_database():
-    """
-    Carrega o banco de dados completo de serviços em memória para a filtragem rápida.
-    O decorador @st.cache_data garante que isso só será feito uma vez.
-    """
+    """Carrega o banco de dados completo de serviços em memória para a filtragem rápida."""
     try:
-        # Verifica se o arquivo existe
-        if not os.path.exists(DATABASE_PATH):
-            st.error(f"Arquivo do banco de dados não encontrado em '{DATABASE_PATH}'. A filtragem em tempo real está desativada.")
-            return pd.DataFrame(columns=['Código', 'Descrição'])
-        
-        # Lê o arquivo CSV com o separador correto
-        df = pd.read_csv(DATABASE_PATH, sep=',')
-        
-        # Verifica se as colunas necessárias existem
-        required_columns = ['descricao_completa_do_servico_prestado', 'codigo_da_composicao']
-        missing_columns = [col for col in required_columns if col not in df.columns]
-        
-        if missing_columns:
-            st.error(f"Colunas necessárias não encontradas no banco de dados: {missing_columns}")
-            return pd.DataFrame(columns=['Código', 'Descrição'])
-        
-        # Renomeia as colunas
-        df.rename(columns={
-            'descricao_completa_do_servico_prestado': 'Descrição', 
-            'codigo_da_composicao': 'Código'
-        }, inplace=True)
-        
+        df = pd.read_csv(DATABASE_PATH)
+        df.rename(columns={'descricao_completa_do_servico_prestado': 'Descrição', 'codigo_da_composicao': 'Código'}, inplace=True)
         return df[['Código', 'Descrição']]
-        
-    except Exception as e:
-        st.error(f"Erro ao carregar o banco de dados: {str(e)}")
+    except FileNotFoundError:
+        st.error(f"Arquivo do banco de dados não encontrado em '{DATABASE_PATH}'. A filtragem em tempo real está desativada.")
         return pd.DataFrame(columns=['Código', 'Descrição'])
 
 # Carrega os dados uma vez
 full_db = load_full_database()
-
 
 # --- Título da Aplicação ---
 st.title("🏗️ Assistente de Orçamento de Obras Públicas")
@@ -73,16 +54,12 @@ except requests.exceptions.RequestException:
 # No terminal, execute:
 cd app
 python -m uvicorn main:app --reload --port 8000
-
-# Aguarde a mensagem: "Aplicação pronta para receber requisições"
-        """, language="bash")
+        """)
 
 st.markdown("---")
 
-
 # --- Divisão da Tela em Duas Colunas ---
 col1, col2 = st.columns(2, gap="large")
-
 
 # --- PAINEL 1: BUSCA SEMÂNTICA INTELIGENTE ---
 with col1:
@@ -144,7 +121,6 @@ with col1:
                 except Exception as e:
                     st.error(f"❌ Erro inesperado: {str(e)}")
 
-
 # --- PAINEL 2: FILTRAGEM INSTANTÂNEA ---
 with col2:
     st.header("2. Filtro Rápido em Tempo Real")
@@ -167,11 +143,10 @@ with col2:
         st.write("A lista completa de serviços aparecerá aqui assim que você começar a digitar.")
         st.dataframe(full_db.head(10), use_container_width=True, height=350) # Mostra os 10 primeiros por padrão
 
-
-# --- SEÇÃO 3: PROCESSAMENTO DE PLANILHAS EM LOTE ---
+# --- SEÇÃO 3: PROCESSAMENTO DE PLANILHAS EM LOTE (VERSÃO RESILIENTE) ---
 st.markdown("\n---\n")
-st.header("📋 Processamento de Planilhas em Lote")
-st.info("Faça o upload de uma planilha Excel (.xlsx) com a coluna 'descricao' e o sistema irá preencher o 'codigo' e a 'fonte' automaticamente.")
+st.header("📋 Processamento de Planilhas em Lote (com Salvamento Automático)")
+st.info("Faça o upload de uma planilha Excel (.xlsx) com a coluna 'descricao'. O sistema processará linha por linha, salvando o progresso continuamente.")
 
 uploaded_file = st.file_uploader("Escolha uma planilha Excel", type=["xlsx"])
 
@@ -180,116 +155,74 @@ if uploaded_file is not None:
     st.write("Pré-visualização da sua planilha:")
     st.dataframe(df_upload.head())
 
-    # Verifica se a coluna 'descricao' existe
     if 'descricao' not in df_upload.columns:
         st.error("A planilha precisa ter uma coluna chamada 'descricao'. Por favor, ajuste e tente novamente.")
     else:
-        if st.button("Processar Planilha Completa", type="primary"):
-            # Verifica se a API está disponível antes de processar
-            try:
-                test_response = requests.get("http://localhost:8000/", timeout=5)
-                if test_response.status_code != 200:
-                    st.error("❌ API não está respondendo. Inicie o backend antes de processar a planilha.")
-                    st.stop()
-            except requests.exceptions.RequestException:
-                st.error("❌ Não foi possível conectar à API. Inicie o backend antes de processar a planilha.")
-                st.info("💡 **Para iniciar o backend:**\n1. Abra um terminal\n2. Execute: `cd app && python -m uvicorn main:app --reload --port 8000`")
-                st.stop()
+        if st.button("Iniciar Processamento Resiliente", type="primary"):
+            # Adiciona as novas colunas se não existirem
+            for col in ['codigo_encontrado', 'fonte_encontrada', 'descricao_encontrada', 'unidade_encontrada', 'valor_unitario_encontrado']:
+                if col not in df_upload.columns:
+                    df_upload[col] = ''
             
-            # Adiciona as novas colunas
-            df_upload['codigo_encontrado'] = ''
-            df_upload['fonte_encontrada'] = ''
-            df_upload['descricao_encontrada'] = ''
-            df_upload['unidade_encontrada'] = ''
-            df_upload['valor_unitario_encontrado'] = ''
-            df_upload['status_processamento'] = ''
+            # Gera nomes de arquivo únicos para esta sessão de processamento
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            temp_excel_path = os.path.join(TEMP_DIR, f"processado_{timestamp}.xlsx")
+            log_path = os.path.join(TEMP_DIR, f"log_{timestamp}.csv")
+            
+            st.warning(f"O progresso será salvo continuamente no arquivo: '{temp_excel_path}'")
             
             progress_bar = st.progress(0, text="Iniciando processamento...")
             total_rows = len(df_upload)
-            errors_count = 0
-            success_count = 0
-
-            # Itera sobre cada linha da planilha
-            for index, row in df_upload.iterrows():
-                query = row['descricao']
-                
-                # Verifica se a descrição não está vazia
-                if pd.isna(query) or str(query).strip() == '':
-                    df_upload.at[index, 'codigo_encontrado'] = 'DESCRIÇÃO VAZIA'
-                    df_upload.at[index, 'fonte_encontrada'] = 'ERRO'
-                    df_upload.at[index, 'descricao_encontrada'] = 'ERRO'
-                    df_upload.at[index, 'unidade_encontrada'] = 'ERRO'
-                    df_upload.at[index, 'valor_unitario_encontrado'] = 'ERRO'
-                    df_upload.at[index, 'status_processamento'] = 'ERRO: Descrição vazia'
-                    errors_count += 1
-                    continue
-                
-                try:
-                    payload = {"texto_busca": str(query), "top_k": 1}
-                    response = requests.post(API_URL, json=payload, timeout=30)
-                    
-                    if response.status_code == 200:
-                        results = response.json().get('results', [])
-                        if results:
-                            # Preenche com os dados do primeiro resultado
-                            result = results[0]
-                            df_upload.at[index, 'codigo_encontrado'] = result.get('codigo', 'N/A')
-                            df_upload.at[index, 'fonte_encontrada'] = result.get('fonte', 'N/A')
-                            df_upload.at[index, 'descricao_encontrada'] = result.get('descricao', 'N/A')
-                            df_upload.at[index, 'unidade_encontrada'] = result.get('unidade', 'N/A')
-                            df_upload.at[index, 'valor_unitario_encontrado'] = result.get('preco', 0.0)
-                            df_upload.at[index, 'status_processamento'] = 'SUCESSO'
-                            success_count += 1
-                        else:
-                            df_upload.at[index, 'codigo_encontrado'] = 'SEM RESULTADO'
-                            df_upload.at[index, 'fonte_encontrada'] = 'N/A'
-                            df_upload.at[index, 'descricao_encontrada'] = 'N/A'
-                            df_upload.at[index, 'unidade_encontrada'] = 'N/A'
-                            df_upload.at[index, 'valor_unitario_encontrado'] = 0.0
-                            df_upload.at[index, 'status_processamento'] = 'SEM RESULTADO'
-                            errors_count += 1
-                    else:
-                        df_upload.at[index, 'codigo_encontrado'] = f'ERRO API {response.status_code}'
-                        df_upload.at[index, 'fonte_encontrada'] = 'ERRO'
-                        df_upload.at[index, 'descricao_encontrada'] = 'ERRO'
-                        df_upload.at[index, 'unidade_encontrada'] = 'ERRO'
-                        df_upload.at[index, 'valor_unitario_encontrado'] = 'ERRO'
-                        df_upload.at[index, 'status_processamento'] = f'ERRO: API retornou {response.status_code}'
-                        errors_count += 1
-                        
-                except Exception as e:
-                    # Se houver erro, preenche com informações do erro
-                    df_upload.at[index, 'codigo_encontrado'] = 'ERRO CONEXÃO'
-                    df_upload.at[index, 'fonte_encontrada'] = 'ERRO'
-                    df_upload.at[index, 'descricao_encontrada'] = 'ERRO'
-                    df_upload.at[index, 'unidade_encontrada'] = 'ERRO'
-                    df_upload.at[index, 'valor_unitario_encontrado'] = 'ERRO'
-                    df_upload.at[index, 'status_processamento'] = f'ERRO: {str(e)[:50]}...'
-                    errors_count += 1
-
-                # Atualiza a barra de progresso
-                progress_bar.progress((index + 1) / total_rows, text=f"Processando linha {index + 1}/{total_rows}...")
-
-            # Mostra estatísticas do processamento
-            if success_count > 0:
-                st.success(f"✅ Planilha processada! {success_count} sucessos, {errors_count} erros.")
-            else:
-                st.warning(f"⚠️ Processamento concluído com problemas: {success_count} sucessos, {errors_count} erros.")
             
-            st.write("Resultado final:")
-            st.dataframe(df_upload)
+            # Abre o arquivo de log para adicionar os resultados
+            with open(log_path, 'w', newline='', encoding='utf-8') as log_file:
+                log_file.write("linha_original;query;codigo_encontrado;descricao_encontrada;status\n")
 
-            # Cria um botão para download do arquivo processado
-            try:
-                output = io.BytesIO()
-                with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                    df_upload.to_excel(writer, index=False, sheet_name='Resultados')
-                
+                # Itera sobre cada linha da planilha
+                for index, row in df_upload.iterrows():
+                    query = row['descricao']
+                    status = "FALHA"
+                    try:
+                        payload = {"texto_busca": str(query), "top_k": 1}
+                        response = requests.post(API_URL, json=payload, timeout=30)
+                        
+                        if response.status_code == 200:
+                            results = response.json().get('results', [])
+                            if results:
+                                top_result = results[0]
+                                # Preenche com os dados do primeiro resultado
+                                df_upload.at[index, 'codigo_encontrado'] = top_result.get('codigo', 'N/A')
+                                df_upload.at[index, 'fonte_encontrada'] = top_result.get('fonte', 'N/A')
+                                df_upload.at[index, 'descricao_encontrada'] = top_result.get('descricao', 'N/A')
+                                df_upload.at[index, 'unidade_encontrada'] = top_result.get('unidade', 'N/A')
+                                df_upload.at[index, 'valor_unitario_encontrado'] = top_result.get('preco', 0.0)
+                                status = "SUCESSO"
+                            else:
+                                status = "NENHUM_RESULTADO"
+                        else:
+                             status = f"ERRO_API_{response.status_code}"
+
+                    except Exception as e:
+                        status = f"ERRO_CONEXAO: {e}"
+
+                    # Grava no arquivo de log
+                    log_file.write(f"{index+1};{query};{df_upload.at[index, 'codigo_encontrado']};{df_upload.at[index, 'descricao_encontrada']};{status}\n")
+                    
+                    # Salva o arquivo Excel completo a cada 5 linhas (ou na última linha)
+                    if (index + 1) % 5 == 0 or (index + 1) == total_rows:
+                        df_upload.to_excel(temp_excel_path, index=False, engine='xlsxwriter')
+
+                    # Atualiza a barra de progresso
+                    progress_bar.progress((index + 1) / total_rows, text=f"Processando linha {index + 1}/{total_rows}... Progresso salvo.")
+
+            st.success("Processamento concluído!")
+            st.info(f"O resultado final foi salvo em '{temp_excel_path}'. Se o processo foi interrompido, você pode encontrar o progresso parcial neste mesmo arquivo.")
+            
+            # Oferece o arquivo final para download
+            with open(temp_excel_path, "rb") as final_file:
                 st.download_button(
-                    label="📥 Baixar Planilha Processada",
-                    data=output.getvalue(),
-                    file_name="planilha_processada.xlsx",
+                    label="📥 Baixar Planilha Processada Final",
+                    data=final_file,
+                    file_name="planilha_processada_final.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
-            except Exception as e:
-                st.error(f"Erro ao gerar arquivo para download: {str(e)}")

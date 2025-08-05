@@ -93,7 +93,7 @@ class ServicoFinder:
                 self.bm25_index = pickle.load(f)
             self.corpus_embeddings = torch.load(embeddings_cache_path, map_location=self.device)
             
-            print("✅ SUCESSO: Índices carregados do cache. Inicialização rápida concluída.")
+            print("SUCESSO: Índices carregados do cache. Inicialização rápida concluída.")
             return
 
         # --- LÓGICA DE PROCESSAMENTO (se não houver cache) ---
@@ -117,7 +117,7 @@ class ServicoFinder:
             pickle.dump(self.bm25_index, f)
         torch.save(self.corpus_embeddings, embeddings_cache_path)
         
-        print("✅ SUCESSO: Processamento concluído e cache criado.")
+        print("SUCESSO: Processamento concluído e cache criado.")
 
     # Os métodos de busca (`find_similar_semantic`, `find_similar_keyword`, `hybrid_search`)
     # permanecem exatamente os mesmos da versão anterior, pois já estão corretos e otimizados.

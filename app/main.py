@@ -145,7 +145,7 @@ async def buscar_servicos(query: SearchQuery):
 
         # --- CHECKPOINT 1 ---
         if chosen_code and chosen_code != "N/A":
-            print("✅ SUCESSO na Tentativa 1.")
+            print("SUCESSO na Tentativa 1.")
             final_results = sorted(retrieved_results, key=lambda x: str(x['codigo']) == str(chosen_code), reverse=True)
             return {"query": query, "results": final_results[:query.top_k]}
 
@@ -174,7 +174,7 @@ async def buscar_servicos(query: SearchQuery):
 
         # --- CHECKPOINT 2 ---
         if chosen_code_t2 and chosen_code_t2 != "N/A":
-            print("✅ SUCESSO na Tentativa 2.")
+            print("SUCESSO na Tentativa 2.")
             final_results = sorted(final_candidates_t2, key=lambda x: str(x['codigo']) == str(chosen_code_t2), reverse=True)
             return {"query": query, "results": final_results[:query.top_k]}
 
@@ -184,7 +184,7 @@ async def buscar_servicos(query: SearchQuery):
         web_keywords = web_researcher_instance.research_and_enrich(query.texto_busca)
         
         if not web_keywords:
-            print("❌ FALHA GERAL: Agente Web não encontrou informações. Retornando os melhores resultados da última tentativa.")
+            print("FALHA GERAL: Agente Web não encontrou informações. Retornando os melhores resultados da última tentativa.")
             return {"query": query, "results": final_candidates_t2[:query.top_k]}
 
         enriched_query = f"{query.texto_busca} {web_keywords}"
@@ -199,9 +199,9 @@ async def buscar_servicos(query: SearchQuery):
         chosen_code_t3 = reasoner_decision_t3.get("codigo_final")
         
         if chosen_code_t3 and chosen_code_t3 != "N/A":
-             print("✅ SUCESSO na Tentativa 3.")
+             print("SUCESSO na Tentativa 3.")
         else:
-             print("❌ FALHA GERAL: Nenhuma das 3 tentativas encontrou um resultado satisfatório.")
+             print("FALHA GERAL: Nenhuma das 3 tentativas encontrou um resultado satisfatório.")
 
         final_results = sorted(retrieved_results_t3, key=lambda x: str(x['codigo']) == str(chosen_code_t3), reverse=True)
         return {"query": query, "results": final_results[:query.top_k]}
