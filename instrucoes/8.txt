@@ -1,0 +1,164 @@
+### **Visão Geral: A "Sala de Controle" dos Agentes**
+
+Vamos criar uma nova interface, uma verdadeira "sala de controle", que lhe permitirá ver a "mente" do nosso sistema a funcionar. Para qualquer busca que você fizer, esta nova ferramenta irá mostrar-lhe:
+
+1.  **O que o Agente 1 (Classificador) pensou:** Qual foi o grupo e a unidade que ele previu? Ele acertou?
+2.  **O que o Agente 2 (Recuperador) encontrou:** Quais foram os candidatos iniciais? Quais novos candidatos a "busca na vizinhança" adicionou? A resposta correta estava nesta lista?
+3.  **Como o Agente 3 (Raciocinador) decidiu:** Qual foi a análise completa (Chain-of-Thought) que o LLM fez para chegar à sua conclusão?
+4.  **Se o Agente 4 (Pesquisador Web) agiu:** A busca na web foi acionada? Quais palavras-chave extras ele encontrou?
+
+Além de ver tudo isso, você terá um campo para escrever as suas "novas orientações", que serão salvas para podermos usá-las para refinar os prompts e a lógica dos agentes no futuro.
+
+-----
+
+### **Instruções para a IA de Programação**
+
+**Objetivo:** Criar uma nova aplicação web de análise (`analysis_interface.py`) que se conecta ao nosso backend existente. Esta interface irá visualizar o processo de decisão de cada agente e permitir que o usuário especialista forneça feedback e novas orientações.
+
+**Tarefa Única: Criar a Interface de Análise e Feedback**
+
+**Instrução:** Crie um novo arquivo na **raiz do projeto** chamado `analysis_interface.py`. Conforme a nossa diretriz, o código completo e final deve ser colocado no CANVAS.
+
+**Código para colocar no CANVAS (`analysis_interface.py`):**
+
+```python
+# analysis_interface.py
+import streamlit as st
+import requests
+import json
+import pandas as pd
+from datetime import datetime
+
+# --- Configuração da Página ---
+st.set_page_config(
+    page_title="Painel de Análise dos Agentes",
+    page_icon="🔬",
+    layout="wide"
+)
+
+# --- Constantes ---
+API_URL = "http://localhost:8000/buscar" # URL do nosso backend FastAPI
+FEEDBACK_LOG_FILE = "feedback_log.csv"
+
+# --- Funções Auxiliares ---
+def get_full_item_details(codigo):
+    # (Esta função pode ser expandida para buscar mais detalhes do item se necessário)
+    # Por enquanto, é um placeholder.
+    return f"Detalhes para o código {codigo}."
+
+# --- Cabeçalho da Aplicação ---
+st.title("🔬 Painel de Análise e Feedback dos Agentes de IA")
+st.markdown("Use esta ferramenta para auditar o processo de decisão do sistema de busca e fornecer orientações para melhorias.")
+st.markdown("---")
+
+# --- Interface Principal ---
+st.header("Análise de Query Individual")
+
+user_query = st.text_input(
+    "Digite a query técnica que deseja analisar:", 
+    "assentamento de porcelanato 60x60cm"
+)
+
+if st.button("Analisar Desempenho dos Agentes", type="primary"):
+    if not user_query:
+        st.error("Por favor, digite uma query para analisar.")
+    else:
+        # Mostra um spinner enquanto a busca está em andamento
+        with st.spinner(f"Executando a query '{user_query}' através do pipeline de agentes..."):
+            try:
+                payload = {"texto_busca": user_query, "top_k": 3}
+                response = requests.post(API_URL, json=payload, timeout=120)
+
+                if response.status_code == 200:
+                    st.success("Pipeline executado com sucesso! Analisando os resultados...")
+                    
+                    # Extrai os dados do log do servidor (assumindo que o main.py ainda tem os prints)
+                    # Para uma versão de produção, o main.py poderia retornar um objeto JSON com todo o log.
+                    # Por agora, vamos simular a visualização com base na resposta final.
+                    
+                    final_response = response.json()
+                    results = final_response.get('results', [])
+
+                    # --- Visualização dos Resultados por Agente ---
+                    st.markdown("---")
+                    
+                    # Para obter os dados dos agentes 1 e 2, precisaríamos modificar o main.py
+                    # para retornar essa informação. Por enquanto, focamos na análise do resultado final.
+                    st.subheader("🕵️ Análise do Resultado Final")
+                    
+                    if not results:
+                        st.warning("A busca não retornou nenhum resultado.")
+                    else:
+                        st.write("Abaixo estão os 3 principais resultados retornados pela equipe de agentes, com a escolha do Agente Raciocinador no topo.")
+                        for item in results:
+                            st.markdown(f"**Rank {item['rank']}: {item['codigo']}** - {item['descricao'].split('|')[0].strip()}")
+                            st.json(item) # Mostra todos os detalhes do item
+
+                    st.markdown("---")
+                    
+                    # --- Seção de Feedback do Especialista ---
+                    st.subheader("🧠 Feedback e Novas Orientações")
+                    st.write("Analise os resultados acima e forneça seu feedback para treinar os agentes.")
+
+                    with st.form("feedback_form"):
+                        st.markdown("**Avaliação do Resultado Final**")
+                        
+                        correct_code = st.text_input(
+                            "Qual era o CÓDIGO CORRETO que você esperava para esta busca? (Deixe em branco se nenhum for ideal)",
+                            placeholder="Ex: 87263"
+                        )
+
+                        is_choice_correct = st.selectbox(
+                            "A escolha do Agente Raciocinador (o item no Rank 1) foi a melhor opção da lista?",
+                            ["Sim", "Não", "Parcialmente"]
+                        )
+                        
+                        st.markdown("**Orientações para os Agentes**")
+                        
+                        agent_feedback = st.text_area(
+                            "Escreva aqui suas orientações. O que a IA deveria ter considerado? Quais termos são mais importantes?",
+                            placeholder="Exemplo: 'A IA deveria ter dado mais peso à característica 'porcelanato' e ignorado 'manilha'. A dimensão 60x60cm também era crucial.'"
+                        )
+
+                        submitted = st.form_submit_button("Salvar Análise e Orientações")
+                        if submitted:
+                            # Salva o feedback em um arquivo CSV para análise futura
+                            feedback_data = {
+                                'timestamp': [datetime.now().isoformat()],
+                                'query': [user_query],
+                                'top_result_code': [results[0]['codigo'] if results else 'N/A'],
+                                'expected_correct_code': [correct_code],
+                                'is_choice_correct': [is_choice_correct],
+                                'human_guidance': [agent_feedback]
+                            }
+                            df_feedback = pd.DataFrame(feedback_data)
+                            
+                            # Adiciona ao arquivo existente ou cria um novo
+                            if os.path.exists(FEEDBACK_LOG_FILE):
+                                df_feedback.to_csv(FEEDBACK_LOG_FILE, mode='a', header=False, index=False, sep=';')
+                            else:
+                                df_feedback.to_csv(FEEDBACK_LOG_FILE, index=False, sep=';')
+                                
+                            st.success("Obrigado! Suas orientações foram salvas e serão usadas para aprimorar o sistema.")
+
+                else:
+                    st.error(f"Ocorreu um erro na API (Status: {response.status_code}).")
+                    st.json(response.text)
+
+            except requests.RequestException as e:
+                st.error(f"Não foi possível conectar ao serviço de busca em {API_URL}.")
+                st.error(f"Detalhe do erro: {e}")
+
+```
+
+### **Como Usar a Nova Ferramenta**
+
+1.  **Crie o Arquivo:** O agente deve criar o arquivo `analysis_interface.py` na raiz do projeto.
+2.  **Inicie o Backend:** Garanta que o servidor `uvicorn` com a nossa API completa esteja a rodar.
+3.  **Inicie a Nova Interface:** Em um **novo terminal**, com o ambiente virtual ativado, execute:
+    ```bash
+    streamlit run analysis_interface.py
+    ```
+    Uma nova aba se abrirá no seu navegador (provavelmente em `http://localhost:8502` ou outra porta se a 8501 já estiver em uso pela outra interface).
+
+Com esta "Sala de Controle", você poderá fazer o que pediu: analisar cada resultado e, mais importante, começar a criar um **log de orientações de especialistas**. Este log será o nosso "ouro" para a próxima e definitiva rodada de otimização, onde poderemos usar as suas próprias palavras para refinar os prompts e a lógica dos agentes, levando a assertividade para o nível de perfeição que você almeja.

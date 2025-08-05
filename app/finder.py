@@ -158,9 +158,12 @@ class ServicoFinder:
 
         reranked_indices = sorted(fused_scores.keys(), key=lambda idx: fused_scores[idx], reverse=True)
         
+        # --- LÓGICA DE RETORNO ATUALIZADA ---
+        top_original_index = -1
         top_semantic_score = 0.0
         if reranked_indices:
             top_item_index = reranked_indices[0]
+            top_original_index = self.dataframe.iloc[top_item_index].name
             top_semantic_score = float(semantic_score_map.get(top_item_index, 0.0))
 
         results = []
@@ -177,4 +180,4 @@ class ServicoFinder:
                 'fonte': item.get('fonte', 'N/A')
             })
             
-        return results, top_semantic_score
+        return results, top_semantic_score, top_original_index # <-- NOVO RETORNO
