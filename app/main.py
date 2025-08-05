@@ -6,10 +6,14 @@ from contextlib import asynccontextmanager
 from openai import OpenAI
 
 # Importa a classe do módulo finder
-from .finder import ServicoFinder
-from .reasoner import ReasonerAgent
-from .classifier_agent import ClassifierAgent
-from .web_researcher_agent import WebResearcherAgent
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+from finder import ServicoFinder
+from reasoner import ReasonerAgent
+from classifier_agent import ClassifierAgent
+from web_researcher_agent import WebResearcherAgent
 
 def get_neighborhood(df, center_index, radius=5):
     """Função auxiliar para pegar os vizinhos de um item no DataFrame."""

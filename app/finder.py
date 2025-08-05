@@ -4,7 +4,7 @@ from sentence_transformers import SentenceTransformer, util
 import torch
 import os
 from rank_bm25 import BM25Okapi
-from app.text_utils import TextNormalizer # Importa nosso normalizador validado
+from text_utils import TextNormalizer # Importa nosso normalizador validado
 import pickle # Biblioteca para salvar/carregar objetos Python
 
 class ServicoFinder:
