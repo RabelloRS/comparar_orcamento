@@ -102,7 +102,7 @@ with col1:
                                     c1.metric("Preço Unitário", f"R$ {item.get('preco', 0.0):.2f}")
                                     c2.metric("Unidade", item.get('unidade', 'N/A'))
                                     c3.metric("Fonte", item.get('fonte', 'N/A'))
-                                    c4.metric("Confiança", f"{item.get('semantic_score', 0.0):.4f}")
+                                    c4.metric("Confiança", f"{item.get('score', 0.0):.4f}")
                     
                     elif response.status_code == 422:
                         st.error("Erro de validação: Verifique se os parâmetros estão corretos.")

@@ -12,7 +12,20 @@ class ReasonerAgent:
     """
     def __init__(self):
         self.client = OpenAI()
-        self.model = "gpt-4o-mini"
+        self.config = self._load_config()
+        self.model = self.config.get('model', 'gpt-4o-mini')
+        self.base_prompt = self.config.get('base_prompt', 'Você é um engenheiro de especificações sênior, extremamente detalhista.')
+        self.user_guidance_template = self.config.get('user_guidance_template', '\n\nInstrução Adicional do Especialista (prioridade máxima): {guidance}. Integre esta orientação em todos os passos de análise, sobrepondo-a ao prompt base se houver conflito.')
+    
+    def _load_config(self):
+        """Carrega configurações do arquivo agents_config.json"""
+        try:
+            with open('agents_config.json', 'r', encoding='utf-8') as f:
+                config = json.load(f)
+                return config.get('reasoner_agent', {})
+        except (FileNotFoundError, json.JSONDecodeError) as e:
+            print(f"AVISO: Erro ao carregar configuração do reasoner: {e}. Usando valores padrão.")
+            return {}
 
     def _build_expert_prompt(self, user_query: str, search_results: list[dict]) -> str:
         prompt = f"""

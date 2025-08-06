@@ -1,0 +1,152 @@
+Instrução Para a IA de Programação: Implementar o Painel de Controle e Orientação dos Agentes
+
+Objetivo: Evoluir o sistema existente para incluir uma interface de controle avançada e robusta que permita ao usuário especialista (1) configurar dinamicamente as instruções, prompts e prioridades dos agentes de forma persistente e segura, e (2) auditar o processo de decisão passo a passo para cada consulta processada, fornecendo feedback corretivo imediato via orientação manual. Essa implementação deve ser integrada ao frontend Gradio já existente no projeto (em app_principal.py), garantindo compatibilidade total com o backend FastAPI. Todas as mudanças devem ser testadas unitariamente para evitar regressões, e o código deve seguir padrões PEP8 com comentários detalhados em cada seção modificada.
+
+Fase A: Fundação do Controle (Backend)
+
+Tarefa 1: Criar o Ficheiro de Configuração Central dos Agentes
+Centralize todas as "regras", "personalidades" e configurações dos agentes em um único ficheiro JSON para facilitar leituras, modificações e persistência dinâmica. Isso garante que as alterações sejam aplicadas em tempo de execução sem reiniciar o servidor, exceto quando explicitamente necessário.
+
+1. Ação: Na raiz do projeto (diretório principal, ao lado de app_principal.py e outros arquivos raiz), crie um novo ficheiro chamado agents_config.json. Certifique-se de que o ficheiro seja criado com permissões de leitura/escrita (chmod 644 em ambientes Unix-like) e adicione-o ao .gitignore se contiver segredos sensíveis.
+
+2. Código para colocar no agents_config.json (copie exatamente este JSON, garantindo indentação de 4 espaços e codificação UTF-8):
+   ```json
+   {
+     "reasoner_agent": {
+       "model": "gpt-4o-mini",
+       "base_prompt": "Você é um engenheiro de especificações sênior, extremamente detalhista. Sua tarefa é analisar a solicitação de um usuário e escolher o serviço mais adequado de uma lista de candidatos, prestando atenção máxima às características técnicas. Adjetivos que definem uma propriedade física, material ou tipo (ex: 'corrugado', 'rígido', 'estrutural', 'manual') são CRÍTICOS e devem ter um peso maior na sua decisão. Sempre priorize precisão sobre velocidade e explique cada passo de raciocínio.",
+       "user_guidance_template": "\n\nInstrução Adicional do Especialista (prioridade máxima): {guidance}. Integre esta orientação em todos os passos de análise, sobrepondo-a ao prompt base se houver conflito."
+     },
+     "classifier_agent": {
+       "model": "gpt-4o-mini",
+       "base_prompt": "Você é um classificador especialista em serviços de construção civil. Analise a query e retorne apenas o grupo e unidade mais prováveis baseados nos dados históricos. Use JSON estrito como saída."
+     },
+     "project_priorities": {
+       "default": ["sinapi", "sicro", "cpos_edificacoes", "cpos_infraestrutura", "cdhu"],
+       "obras_federais": ["sinapi", "sicro"],
+       "prefeitura_sp": ["sp_obras", "sinapi"]
+     }
+   }
+   ```
+
+Tarefa 2: Refatorar os Agentes para Usar a Configuração Dinâmica
+Refatore os agentes para carregar configurações do ficheiro JSON no momento de inicialização, permitindo recarregamento dinâmico sem downtime. Isso inclui validação de JSON para evitar erros de parsing.
+
+1. Ação: Modifique o backend/services/reasoner.py (anteriormente app/reasoner.py, ajustando o path se necessário) e backend/services/classifier_agent.py para carregar o modelo e o prompt do agents_config.json nos seus métodos __init__. Use a biblioteca json para leitura, e adicione try-except para lidar com FileNotFoundError ou JSONDecodeError, caindo para valores default hardcoded se o ficheiro falhar. No ReasonerAgent, atualize _build_expert_prompt para concatenar base_prompt com user_guidance_template se guidance for fornecido.
+
+2. Ação: Modifique o backend/services/finder.py (anteriormente app/finder.py) para aceitar um novo parâmetro priority_list: list[str] = None no método hybrid_search. Dentro do método, após calcular fused_scores, implemente uma lógica de boost: para cada idx em fused_scores, verifique item['fonte'] contra priority_list; se a fonte estiver na lista, multiplique o score por (1 + (len(priority_list) - posição_na_lista) * 0.2), onde posição_na_lista é o índice (0 para topo = boost máximo). Se priority_list for None, use o "default" do config. Adicione logging.debug para registrar boosts aplicados.
+
+3. Ação: Em backend/api/routes.py, atualize o endpoint /buscar para aceitar "project_profile": str (opcional, default="default") e "user_guidance": str (opcional) no modelo SearchQuery. Passe priority_list do config['project_priorities'][project_profile] para hybrid_search, e user_guidance para reasoner_instance.choose_best_option.
+
+Tarefa 3: Implementar o Sistema de Trace Detalhado
+Crie um "gravador de voo" abrangente para cada consulta, registrando todos os passos em um dicionário estruturado para fácil visualização e depuração.
+
+1. Ação: Em backend/api/routes.py (anteriormente app/main.py ou routes.py, ajustando conforme estrutura), no endpoint buscar_servicos (função async def buscar_servicos), inicialize um dicionário trace = {"steps": []} no início. Em cada etapa (extração de keywords, classificação, busca inicial, raciocínio, busca web se aplicável, adição de vizinhos), adicione entradas como trace["steps"].append({"step_name": "Classificação", "input": query.texto_busca, "output": (predicted_group, predicted_unit), "timestamp": datetime.now().isoformat()}). Inclua erros potenciais em uma chave "errors" se ocorrerem.
+
+2. Ação: Modifique o modelo SearchResponse para incluir um campo trace: dict = Field(default_factory=dict, description="Dicionário detalhado do trace de execução"). No return SearchResponse, passe trace=trace. Atualize o endpoint para retornar HTTP 200 mesmo com traces de erro, garantindo que o trace capture exceções.
+
+Fase B: A Interface de Controle (Frontend)
+
+Tarefa 4: Integrar a Nova "Sala de Controle" no Gradio Existente
+Integre uma nova aba de controle avançado diretamente no app_principal.py (o frontend Gradio existente), usando blocos Gradio para layout responsivo. Isso evita criar um novo ficheiro separado, mantendo tudo centralizado. Use gr.Tab para adicionar a aba "Painel de Controle dos Agentes". Certifique-se de que a interface seja wide (largura máxima), com validações de input e feedback visual (spinners, sucessos/erros).
+
+1. Ação: Abra app_principal.py e, dentro da função create_dashboard() ou equivalente (onde os Tabs principais são definidos), adicione uma nova gr.Tab("Painel de Controle dos Agentes"). Use with gr.Row() para dividir em colunas (esquerda para configuração, direita para teste/trace), com variant="panel" para um visual profissional.
+
+2. Código para integrar no app_principal.py (insira este bloco dentro do with gr.Blocks() as demo:, após as abas existentes; ajuste imports se necessário adicionando import json, import requests, from datetime import datetime; certifique-se de que API_URL = "http://127.0.0.1:8000/buscar" esteja definido globalmente):
+   ```python
+   with gr.Tab("🔬 Painel de Controle e Orientação dos Agentes"):
+       gr.Markdown("### ⚙️ Configuração e Controle Avançado dos Agentes\nAqui você pode editar prompts, prioridades e auditar traces em tempo real. Todas as alterações são salvas persistentemente.")
+
+       with gr.Row():
+           with gr.Column(scale=1):  # Coluna esquerda: Configuração (1/3 da tela)
+               gr.Markdown("#### Configuração dos Agentes")
+
+               def load_config_fn():
+                   try:
+                       with open("agents_config.json", 'r', encoding='utf-8') as f:
+                           return json.load(f)
+                   except Exception as e:
+                       return {"error": str(e)}
+
+               def save_config_fn(config_data):
+                   try:
+                       with open("agents_config.json", 'w', encoding='utf-8') as f:
+                           json.dump(config_data, f, indent=4, ensure_ascii=False)
+                       return "✅ Configurações salvas com sucesso! Reinicie o backend se necessário para aplicar."
+                   except Exception as e:
+                       return f"❌ Erro ao salvar: {str(e)}"
+
+               config_output = gr.JSON(label="Configuração Atual (Carregue para editar)", value=load_config_fn)
+
+               load_config_btn = gr.Button("Carregar Configuração Atual")
+               load_config_btn.click(fn=load_config_fn, outputs=config_output)
+
+               # Editor de Prioridades de Projeto
+               project_select = gr.Dropdown(label="Escolha um Perfil de Projeto para Editar", choices=lambda: list(load_config_fn().get('project_priorities', {}).keys()))
+               priorities_text = gr.TextArea(label="Ordem de Prioridade (uma fonte por linha)", lines=5)
+
+               def update_priorities(project):
+                   config = load_config_fn()
+                   return "\n".join(config['project_priorities'].get(project, []))
+
+               project_select.change(fn=update_priorities, inputs=project_select, outputs=priorities_text)
+
+               # Editor de Instruções do Agente Raciocinador
+               reasoner_prompt_text = gr.TextArea(label="Prompt Base para ReasonerAgent", lines=10)
+               classifier_prompt_text = gr.TextArea(label="Prompt Base para ClassifierAgent", lines=5)
+
+               def update_prompts():
+                   config = load_config_fn()
+                   return config['reasoner_agent'].get('base_prompt', ""), config['classifier_agent'].get('base_prompt', "")
+
+               update_prompts_btn = gr.Button("Atualizar Prompts")
+               update_prompts_btn.click(fn=update_prompts, outputs=[reasoner_prompt_text, classifier_prompt_text])
+
+               save_btn = gr.Button("Salvar Todas as Configurações", variant="primary")
+               save_status = gr.Textbox(label="Status da Salvação")
+
+               def save_all(project, priorities, reasoner_prompt, classifier_prompt):
+                   config = load_config_fn()
+                   config['project_priorities'][project] = [line.strip() for line in priorities.split('\n') if line.strip()]
+                   config['reasoner_agent']['base_prompt'] = reasoner_prompt
+                   config['classifier_agent']['base_prompt'] = classifier_prompt
+                   return save_config_fn(config)
+
+               save_btn.click(fn=save_all, inputs=[project_select, priorities_text, reasoner_prompt_text, classifier_prompt_text], outputs=save_status)
+
+           with gr.Column(scale=2):  # Coluna direita: Teste e Análise (2/3 da tela)
+               gr.Markdown("#### 🧪 Teste e Análise de Raciocínio")
+
+               query_input = gr.Textbox(label="Digite a Query para Testar", value="assentamento de porcelanato 60x60cm", lines=2)
+               project_profile_input = gr.Dropdown(label="Perfil de Projeto (para Prioridades)", choices=lambda: list(load_config_fn().get('project_priorities', {}).keys()), value="default")
+               user_guidance_input = gr.TextArea(label="Orientação Manual para esta Busca (Opcional)", lines=5, placeholder="Ex: 'Foque na característica 'porcelanato'. Ignore o tamanho por agora e priorize fontes federais.'")
+
+               execute_btn = gr.Button("Executar e Analisar Trace", variant="primary")
+               results_output = gr.Dataframe(label="✅ Resultado Final")
+               trace_output = gr.JSON(label="🧠 Trace Detalhado do Raciocínio")
+               status_output = gr.Textbox(label="Status da Execução")
+
+               def execute_query(query, project_profile, user_guidance):
+                   payload = {"texto_busca": query, "top_k": 3, "project_profile": project_profile, "user_guidance": user_guidance}
+                   try:
+                       response = requests.post("http://127.0.0.1:8000/buscar", json=payload, timeout=30)
+                       if response.status_code == 200:
+                           data = response.json()
+                           return data.get('results', []), data.get('trace', {}), "✅ Sucesso: Trace e resultados carregados."
+                       else:
+                           return [], {}, f"❌ Erro na API: {response.status_code} - {response.text}"
+                   except Exception as e:
+                       return [], {}, f"❌ Erro de conexão: {str(e)}"
+
+               execute_btn.click(fn=execute_query, inputs=[query_input, project_profile_input, user_guidance_input], outputs=[results_output, trace_output, status_output])
+   ```
+
+Como Executar e Usar
+
+1. Aplique as Modificações: Implemente todas as mudanças no backend (routes.py, finder.py, reasoner.py, classifier_agent.py) e integre o código acima no frontend Gradio em app_principal.py. Teste cada tarefa individualmente: rode pytest (se configurado) ou testes manuais para endpoints e configs.
+
+2. Inicie o Backend: No terminal, execute uvicorn backend.api.main:app --reload --port 8000 (ajuste o path se necessário para compatibilidade com a estrutura existente).
+
+3. Inicie a Interface Gradio: No mesmo terminal ou outro, execute python app_principal.py (ou o comando equivalente para rodar o Gradio). Acesse http://127.0.0.1:7860 (porta default do Gradio) e navegue para a aba "Painel de Controle dos Agentes".
+
+Com esta implementação assertiva e detalhada, você terá controle total e granular sobre os agentes. A interface Gradio garante responsividade cross-browser, com atualizações em tempo real via botões e eventos. Refine iterativamente: após salvar configs, teste queries para validar boosts e traces, garantindo que o sistema atinja precisão máxima em cenários reais de construção civil. Se erros ocorrerem durante a implementação, adicione logging adicional e reporte-os explicitamente.

@@ -21,14 +21,14 @@ def buscar_servico_handler(texto_busca, top_k):
             
             # Converte os resultados para um DataFrame do Pandas
             df = pd.DataFrame(results)
-            df_display = df[['codigo', 'descricao', 'preco', 'unidade', 'fonte', 'semantic_score']]
+            df_display = df[['codigo', 'descricao', 'preco', 'unidade', 'fonte', 'score']]
             df_display.rename(columns={
                 'codigo': 'Código',
                 'descricao': 'Descrição',
                 'preco': 'Preço',
                 'unidade': 'Unidade',
                 'fonte': 'Fonte',
-                'semantic_score': 'Score Semântico'
+                'score': 'Score Semântico'
             }, inplace=True)
             
             status_md = f"**Status:** Encontrados {len(results)} resultados relevantes."

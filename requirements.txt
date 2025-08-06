@@ -17,3 +17,4 @@ streamlit
 openpyxl
 xlsxwriter
 gradio
+psutil
