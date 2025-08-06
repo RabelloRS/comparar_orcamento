@@ -27,9 +27,17 @@ class ReasonerAgent:
             print(f"AVISO: Erro ao carregar configuração do reasoner: {e}. Usando valores padrão.")
             return {}
 
-    def _build_expert_prompt(self, user_query: str, search_results: list[dict]) -> str:
+    def _build_expert_prompt(self, user_query: str, search_results: list[dict], user_guidance: str = None) -> str:
+        # Usa o base_prompt carregado da configuração
+        base_instruction = self.base_prompt
+        
+        # Adiciona orientação do usuário se fornecida
+        if user_guidance:
+            guidance_text = self.user_guidance_template.format(guidance=user_guidance)
+            base_instruction += guidance_text
+        
         prompt = f"""
-Você é um engenheiro de especificações sênior e detalhista. Sua tarefa é analisar a solicitação de um usuário e escolher o serviço mais adequado de uma lista de candidatos.
+{base_instruction}
 
 Siga estritamente os seguintes passos no seu raciocínio:
 1. **Análise da Solicitação:** Analise a solicitação: "{user_query}". Identifique os componentes principais e as CARACTERÍSTICAS CRÍTICAS (materiais, dimensões, tipos como 'corrugado', 'manual', etc.).
@@ -58,14 +66,15 @@ Sua resposta final DEVE ser um objeto JSON formatado EXATAMENTE da seguinte form
 """
         return prompt
 
-    def choose_best_option(self, user_query: str, search_results: list[dict]) -> dict:
+    def choose_best_option(self, user_query: str, search_results: list[dict], user_guidance: str = None) -> dict:
         """
         Retorna um dicionário contendo a análise completa e a decisão do LLM.
+        Aceita orientação manual do usuário para refinar o processo de decisão.
         """
         if not search_results:
             return {"raciocinio": "Nenhum candidato inicial foi fornecido pelo recuperador.", "codigo_final": "N/A", "palavras_chave_para_nova_busca": user_query}
         
-        prompt = self._build_expert_prompt(user_query, search_results)
+        prompt = self._build_expert_prompt(user_query, search_results, user_guidance)
         try:
             response = self.client.chat.completions.create(
                 model=self.model,

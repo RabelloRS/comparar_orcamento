@@ -7,6 +7,7 @@ import time
 import requests
 import psutil
 import gradio as gr
+import json
 from pathlib import Path
 
 # Adiciona o diretório do projeto ao path
@@ -355,6 +356,95 @@ def create_dashboard():
                             visible=True
                         )
             
+            # Aba 3: Controle Avançado dos Agentes
+            with gr.TabItem("🤖 Controle dos Agentes"):
+                gr.Markdown("### 🤖 Painel de Controle e Orientação dos Agentes de IA")
+                
+                # Layout em 2 colunas
+                with gr.Row(equal_height=True):
+                    # Coluna 1: Configuração dos Agentes
+                    with gr.Column(scale=1, min_width=400):
+                        gr.Markdown("#### ⚙️ Configuração dos Agentes")
+                        
+                        # Seletor de agente
+                        agent_selector = gr.Dropdown(
+                            choices=["classifier", "reasoner", "finder"],
+                            value="reasoner",
+                            label="Agente para Configurar",
+                            info="Selecione o agente que deseja configurar"
+                        )
+                        
+                        # Editor de prompt base
+                        base_prompt_editor = gr.Textbox(
+                            label="Prompt Base do Agente",
+                            lines=8,
+                            placeholder="O prompt base será carregado aqui...",
+                            info="Edite o prompt base que define o comportamento do agente"
+                        )
+                        
+                        # Editor de orientação do usuário
+                        user_guidance_editor = gr.Textbox(
+                            label="Orientação Manual (Opcional)",
+                            lines=4,
+                            placeholder="Digite orientações específicas para refinar o comportamento...",
+                            info="Orientações adicionais que serão aplicadas durante a execução"
+                        )
+                        
+                        # Configuração de prioridades do projeto
+                        project_profile_editor = gr.Textbox(
+                            label="Perfil do Projeto",
+                            lines=3,
+                            placeholder="Ex: residencial, comercial, industrial...",
+                            info="Define o tipo de projeto para ajustar prioridades"
+                        )
+                        
+                        # Botões de controle
+                        with gr.Row():
+                            load_config_btn = gr.Button("📥 Carregar Config", variant="secondary", size="sm")
+                            save_config_btn = gr.Button("💾 Salvar Config", variant="primary", size="sm")
+                            reset_config_btn = gr.Button("🔄 Resetar", variant="stop", size="sm")
+                        
+                        # Status da configuração
+                        config_status = gr.Textbox(
+                            label="Status da Configuração",
+                            interactive=False,
+                            lines=2
+                        )
+                    
+                    # Coluna 2: Teste e Análise
+                    with gr.Column(scale=1, min_width=400):
+                        gr.Markdown("#### 🧪 Teste e Análise em Tempo Real")
+                        
+                        # Campo de teste
+                        test_query = gr.Textbox(
+                            label="Query de Teste",
+                            placeholder="Digite uma consulta para testar o agente...",
+                            lines=3
+                        )
+                        
+                        # Botão de teste
+                        test_agent_btn = gr.Button("🧪 Testar Agente", variant="primary", size="lg")
+                        
+                        # Resultados do teste
+                        test_results = gr.JSON(
+                            label="Resultados do Teste",
+                            visible=True
+                        )
+                        
+                        # Trace detalhado
+                        trace_display = gr.JSON(
+                            label="Trace Detalhado da Execução",
+                            visible=True
+                        )
+                        
+                        # Log de auditoria
+                        audit_log = gr.Textbox(
+                            label="Log de Auditoria",
+                            lines=6,
+                            interactive=False,
+                            placeholder="Logs de auditoria aparecerão aqui..."
+                        )
+            
             # Abas modulares (se disponíveis)
             if MODULAR_PAGES_AVAILABLE:
                 # Aba 3: Busca Semântica Avançada
@@ -421,6 +511,126 @@ def create_dashboard():
                      - **Python**: {}
                      """.format(gr.__version__, sys.version.split()[0])
                 )
+        
+        # Funções para controle dos agentes
+        def load_agent_config(agent_name):
+            """Carrega a configuração do agente selecionado"""
+            try:
+                config_path = app_dir / "agents_config.json"
+                if config_path.exists():
+                    with open(config_path, 'r', encoding='utf-8') as f:
+                        config = json.load(f)
+                    
+                    agent_config = config.get('agents', {}).get(agent_name, {})
+                    base_prompt = agent_config.get('base_prompt', '')
+                    
+                    # Carrega prioridades do projeto se existirem
+                    project_priorities = config.get('project_priorities', {})
+                    project_profile = ', '.join(project_priorities.keys()) if project_priorities else ''
+                    
+                    return base_prompt, project_profile, f"✅ Configuração do agente '{agent_name}' carregada com sucesso"
+                else:
+                    return "", "", "⚠️ Arquivo agents_config.json não encontrado"
+            except Exception as e:
+                return "", "", f"❌ Erro ao carregar configuração: {str(e)}"
+        
+        def save_agent_config(agent_name, base_prompt, project_profile):
+            """Salva a configuração do agente"""
+            try:
+                config_path = app_dir / "agents_config.json"
+                
+                # Carrega configuração existente ou cria nova
+                if config_path.exists():
+                    with open(config_path, 'r', encoding='utf-8') as f:
+                        config = json.load(f)
+                else:
+                    config = {"agents": {}, "project_priorities": {}}
+                
+                # Atualiza configuração do agente
+                if 'agents' not in config:
+                    config['agents'] = {}
+                
+                config['agents'][agent_name] = {
+                    "model": config['agents'].get(agent_name, {}).get('model', 'gpt-4o-mini'),
+                    "base_prompt": base_prompt
+                }
+                
+                # Atualiza prioridades do projeto
+                if project_profile.strip():
+                    profiles = [p.strip() for p in project_profile.split(',') if p.strip()]
+                    for i, profile in enumerate(profiles):
+                        config['project_priorities'][profile] = 1.0 + (0.1 * i)
+                
+                # Salva arquivo
+                with open(config_path, 'w', encoding='utf-8') as f:
+                    json.dump(config, f, indent=2, ensure_ascii=False)
+                
+                return f"✅ Configuração do agente '{agent_name}' salva com sucesso"
+            except Exception as e:
+                return f"❌ Erro ao salvar configuração: {str(e)}"
+        
+        def reset_agent_config(agent_name):
+            """Reseta a configuração do agente para valores padrão"""
+            defaults = {
+                "classifier": "Você é um classificador especializado em construção civil. Analise o texto e classifique adequadamente.",
+                "reasoner": "Você é um engenheiro de especificações sênior e detalhista. Sua tarefa é analisar a solicitação de um usuário e escolher o serviço mais adequado de uma lista de candidatos.",
+                "finder": "Sistema de busca híbrida para itens de construção civil."
+            }
+            
+            base_prompt = defaults.get(agent_name, "")
+            return base_prompt, "", f"🔄 Configuração do agente '{agent_name}' resetada para valores padrão"
+        
+        def test_agent_with_config(agent_name, query, user_guidance, project_profile):
+            """Testa o agente com a configuração atual"""
+            if not query.strip():
+                return {"erro": "Digite uma query para testar"}, {}, "❌ Query de teste vazia"
+            
+            try:
+                # Verifica se o backend está rodando
+                try:
+                    health_response = requests.get("http://127.0.0.1:8001/health", timeout=2)
+                    if health_response.status_code != 200:
+                        return {"erro": "Backend não está respondendo"}, {}, "❌ Backend offline"
+                except:
+                    return {"erro": "Backend não está acessível"}, {}, "❌ Erro de conexão com backend"
+                
+                # Prepara dados para teste
+                test_data = {
+                    "texto_busca": query,
+                    "top_k": 3
+                }
+                
+                # Adiciona orientação e perfil se fornecidos
+                if user_guidance.strip():
+                    test_data["user_guidance"] = user_guidance.strip()
+                if project_profile.strip():
+                    test_data["project_profile"] = project_profile.strip()
+                
+                # Realiza o teste
+                response = requests.post(
+                    "http://127.0.0.1:8001/buscar",
+                    json=test_data,
+                    timeout=15
+                )
+                
+                if response.status_code == 200:
+                    results = response.json()
+                    trace = results.get('trace', {})
+                    
+                    # Remove trace dos resultados principais para melhor visualização
+                    clean_results = {k: v for k, v in results.items() if k != 'trace'}
+                    
+                    audit_msg = f"✅ Teste realizado com sucesso\nAgente: {agent_name}\nQuery: {query}\nResultados: {len(clean_results.get('resultados', []))} itens"
+                    
+                    return clean_results, trace, audit_msg
+                else:
+                    error_msg = f"Erro {response.status_code}: {response.text}"
+                    return {"erro": error_msg}, {}, f"❌ Erro no teste: {response.status_code}"
+                    
+            except requests.exceptions.Timeout:
+                return {"erro": "Timeout no teste"}, {}, "⏱️ Teste demorou muito para responder"
+            except Exception as e:
+                return {"erro": f"Erro inesperado: {str(e)}"}, {}, f"❌ Erro: {str(e)}"
         
         # Funções dos botões
         def update_status():
@@ -533,10 +743,54 @@ def create_dashboard():
             outputs=[status_display, action_log]
         )
         
+        # Event handlers para controle dos agentes
+        agent_selector.change(
+            fn=load_agent_config,
+            inputs=[agent_selector],
+            outputs=[base_prompt_editor, project_profile_editor, config_status]
+        )
+        
+        load_config_btn.click(
+            fn=load_agent_config,
+            inputs=[agent_selector],
+            outputs=[base_prompt_editor, project_profile_editor, config_status]
+        )
+        
+        save_config_btn.click(
+            fn=save_agent_config,
+            inputs=[agent_selector, base_prompt_editor, project_profile_editor],
+            outputs=[config_status]
+        )
+        
+        reset_config_btn.click(
+            fn=reset_agent_config,
+            inputs=[agent_selector],
+            outputs=[base_prompt_editor, project_profile_editor, config_status]
+        )
+        
+        test_agent_btn.click(
+            fn=test_agent_with_config,
+            inputs=[agent_selector, test_query, user_guidance_editor, project_profile_editor],
+            outputs=[test_results, trace_display, audit_log]
+        )
+        
+        # Teste ao pressionar Enter no campo de query
+        test_query.submit(
+            fn=test_agent_with_config,
+            inputs=[agent_selector, test_query, user_guidance_editor, project_profile_editor],
+            outputs=[test_results, trace_display, audit_log]
+        )
+        
         # Atualização inicial do status
         demo.load(
             fn=update_status,
             outputs=[status_display]
+        )
+        
+        # Carrega configuração inicial do agente padrão
+        demo.load(
+            fn=lambda: load_agent_config("reasoner"),
+            outputs=[base_prompt_editor, project_profile_editor, config_status]
         )
     
     return demo

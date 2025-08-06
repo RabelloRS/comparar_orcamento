@@ -6,6 +6,8 @@ import os
 from rank_bm25 import BM25Okapi
 from backend.core.text_utils import TextNormalizer # Importa nosso normalizador validado
 import pickle # Biblioteca para salvar/carregar objetos Python
+import json
+import logging
 
 class ServicoFinder:
     """
@@ -138,7 +140,8 @@ class ServicoFinder:
 
     def hybrid_search(self, query: str, top_k: int = 5, alpha: float = 0.5, 
                       predicted_group: str = None, predicted_unit: str = None, 
-                      group_boost: float = 1.5, unit_boost: float = 1.2):
+                      group_boost: float = 1.5, unit_boost: float = 1.2,
+                      priority_list: list[str] = None):
         
         # Inicializa o log detalhado do processo de raciocínio
         reasoning_log = []
@@ -196,6 +199,52 @@ class ServicoFinder:
                     reasoning_log.append(f"   • 🚀 Item {idx}: score {original_score:.4f} → {fused_scores[idx]:.4f}")
             
             reasoning_log.append(f"   • ✅ {boost_count} itens receberam boost de relevância")
+        
+        # Aplicar boost de prioridades se priority_list for fornecida
+        if priority_list:
+            reasoning_log.append(f"\n🎯 **ETAPA 4.5: APLICAÇÃO DE BOOST DE PRIORIDADES**")
+            reasoning_log.append(f"   • Lista de prioridades: {priority_list}")
+            priority_boost_count = 0
+            
+            for idx in fused_scores:
+                item_fonte = self.dataframe.iloc[idx].get('fonte', '')
+                original_score = fused_scores[idx]
+                
+                if item_fonte in priority_list:
+                    posicao_na_lista = priority_list.index(item_fonte)
+                    boost_multiplier = 1 + (len(priority_list) - posicao_na_lista) * 0.2
+                    fused_scores[idx] *= boost_multiplier
+                    priority_boost_count += 1
+                    
+                    logging.debug(f"Boost aplicado: fonte '{item_fonte}' (posição {posicao_na_lista}) - "
+                                f"score {original_score:.4f} → {fused_scores[idx]:.4f} (boost: {boost_multiplier:.2f}x)")
+                    
+                    reasoning_log.append(f"   • 🚀 Fonte '{item_fonte}' (pos. {posicao_na_lista}): "
+                                        f"score {original_score:.4f} → {fused_scores[idx]:.4f} (boost: {boost_multiplier:.2f}x)")
+            
+            reasoning_log.append(f"   • ✅ {priority_boost_count} itens receberam boost de prioridade")
+        else:
+            # Carrega prioridades padrão do config se priority_list não for fornecida
+            try:
+                with open("agents_config.json", 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                    default_priorities = config.get('project_priorities', {}).get('default', [])
+                    if default_priorities:
+                        reasoning_log.append(f"\n🎯 **ETAPA 4.5: APLICAÇÃO DE BOOST DE PRIORIDADES PADRÃO**")
+                        reasoning_log.append(f"   • Usando prioridades padrão: {default_priorities}")
+                        
+                        for idx in fused_scores:
+                            item_fonte = self.dataframe.iloc[idx].get('fonte', '')
+                            if item_fonte in default_priorities:
+                                posicao_na_lista = default_priorities.index(item_fonte)
+                                boost_multiplier = 1 + (len(default_priorities) - posicao_na_lista) * 0.2
+                                original_score = fused_scores[idx]
+                                fused_scores[idx] *= boost_multiplier
+                                
+                                logging.debug(f"Boost padrão aplicado: fonte '{item_fonte}' - "
+                                            f"score {original_score:.4f} → {fused_scores[idx]:.4f}")
+            except (FileNotFoundError, json.JSONDecodeError):
+                reasoning_log.append(f"   • ⚠️ Configuração de prioridades não encontrada, continuando sem boost")
         
         reasoning_log.append(f"\n📊 **ETAPA 5: RANKING FINAL**")
         reranked_indices = sorted(fused_scores.keys(), key=lambda idx: fused_scores[idx], reverse=True)

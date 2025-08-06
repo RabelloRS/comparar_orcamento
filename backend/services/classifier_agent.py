@@ -1,4 +1,4 @@
-# /app/classifier_agent.py
+# /backend/services/classifier_agent.py
 import pandas as pd
 import os
 import json
@@ -6,11 +6,33 @@ from openai import OpenAI
 
 class ClassifierAgent:
     """
-    Usa um LLM (gpt-3.5-turbo) para realizar uma classificação de alta precisão.
+    Usa um LLM para realizar uma classificação de alta precisão.
+    Carrega configurações dinamicamente do agents_config.json.
     """
     def __init__(self, data_filepath):
         self.client = OpenAI() # Reutiliza a chave do .env
-        self.model = "gpt-4o-mini"
+        
+        # Carrega configurações do agents_config.json
+        self.model, self.base_prompt = self._load_config()
+
+    
+    def _load_config(self):
+        """Carrega configurações do agents_config.json com fallback para valores padrão."""
+        try:
+            with open("agents_config.json", 'r', encoding='utf-8') as f:
+                config = json.load(f)
+                classifier_config = config.get('classifier_agent', {})
+                model = classifier_config.get('model', 'gpt-4o-mini')
+                base_prompt = classifier_config.get('base_prompt', 
+                    'Você é um classificador especialista em serviços de construção civil. '
+                    'Analise a query e retorne apenas o grupo e unidade mais prováveis baseados nos dados históricos. '
+                    'Use JSON estrito como saída.')
+                return model, base_prompt
+        except (FileNotFoundError, json.JSONDecodeError) as e:
+            print(f"AVISO: Erro ao carregar agents_config.json: {e}. Usando valores padrão.")
+            return 'gpt-4o-mini', ('Você é um classificador especialista em serviços de construção civil. '
+                                  'Analise a query e retorne apenas o grupo e unidade mais prováveis baseados nos dados históricos. '
+                                  'Use JSON estrito como saída.')
         
         # Carrega os grupos e unidades ÚNICOS para dar como opções ao LLM
         df = pd.read_csv(data_filepath)
@@ -20,7 +42,7 @@ class ClassifierAgent:
 
     def _build_prompt(self, query: str):
         prompt = f"""
-        Você é um engenheiro de orçamentos especialista em classificar serviços de construção civil. Sua tarefa é analisar a solicitação do usuário e retornar a classificação mais provável para o 'Grupo de Serviço' e a 'Unidade de Medida'.
+        {self.base_prompt}
 
         Solicitação do Usuário: "{query}"
 
